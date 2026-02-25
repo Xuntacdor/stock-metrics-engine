@@ -26,7 +26,6 @@ public class PortfolioService : IPortfolioService
 
         foreach (var h in holdings)
         {
-            // Get latest close price from Candles table
             var latestCandle = await _context.Candles
                 .Where(c => c.Symbol == h.Symbol)
                 .OrderByDescending(c => c.Timestamp)
