@@ -7,12 +7,12 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-DB_SERVER = os.getenv("DB_SERVER", "localhost")
-DB_NAME = os.getenv("DB_NAME", "QuantIQ_DB")
-DB_USER = os.getenv("DB_USER", "sa")
+DB_SERVER = os.getenv("DB_SERVER")
+DB_NAME = os.getenv("DB_NAME")
+DB_USER = os.getenv("DB_USER")
 DB_PASSWORD = os.getenv("DB_PASSWORD")
 
-DNSE_API_URL = os.getenv("DNSE_API_URL")
+DNSE_API_URL = os.getenv("DNSE_API_KEY")
 
 def get_db_connection():
     conn_str = (
