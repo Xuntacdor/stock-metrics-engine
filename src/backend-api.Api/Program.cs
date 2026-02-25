@@ -10,7 +10,7 @@ using System.IdentityModel.Tokens.Jwt;
 using StackExchange.Redis;
 using Microsoft.OpenApi.Models;
 
-Env.Load();
+Env.TraversePath().Load();
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -29,7 +29,7 @@ builder.Services.AddSwaggerGen(c =>
         Scheme = "Bearer",
         BearerFormat = "JWT",
         In = ParameterLocation.Header,
-        Description = "Nhập JWT token: Bearer {token}"
+        Description = "Enter JWT token: Bearer {token}"
     });
     c.AddSecurityRequirement(new OpenApiSecurityRequirement
     {
@@ -44,10 +44,22 @@ builder.Services.AddSwaggerGen(c =>
 });
 
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+
+if (string.IsNullOrEmpty(connectionString))
+{
+    throw new InvalidOperationException("Connection String is not found in the configuration.");
+}
+
 builder.Services.AddDbContext<QuantIQContext>(options =>
     options.UseSqlServer(connectionString));
+
 var jwtSettings = builder.Configuration.GetSection("JwtSettings");
-var secretKey = jwtSettings["SecretKey"]!;
+var secretKey = jwtSettings["SecretKey"];
+
+if (string.IsNullOrEmpty(secretKey))
+{
+    throw new InvalidOperationException("SecretKey is not found in the configuration.");
+}
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
@@ -67,12 +79,12 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         {
             OnTokenValidated = async context =>
             {
-               var cacheService =  context.HttpContext.RequestServices.GetRequiredService<ICacheService>();
-               var token  = context.SecurityToken as JwtSecurityToken;
-               if(token != null && await cacheService.IsTokenBlacklistedAsync(token.RawData))
-               {
-                context.Fail("Token is blacklisted(Logout)");
-               }
+                var cacheService = context.HttpContext.RequestServices.GetRequiredService<ICacheService>();
+                var token = context.SecurityToken as JwtSecurityToken;
+                if (token != null && await cacheService.IsTokenBlacklistedAsync(token.RawData))
+                {
+                    context.Fail("Token is blacklisted(Logout)");
+                }
             }
         };
     });
@@ -97,6 +109,7 @@ builder.Services.AddScoped<IOrderService, OrderService>();
 builder.Services.AddScoped<IPortfolioService, PortfolioService>();
 builder.Services.AddScoped<ITransactionService, TransactionService>();
 builder.Services.AddScoped<IWalletService, WalletService>();
+
 var app = builder.Build();
 
 if (app.Environment.IsDevelopment())
