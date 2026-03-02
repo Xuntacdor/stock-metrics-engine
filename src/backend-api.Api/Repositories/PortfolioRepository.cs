@@ -26,6 +26,13 @@ public class PortfolioRepository : IPortfolioRepository
             .ToListAsync();
     }
 
+    public async Task<IEnumerable<Portfolio>> GetBySymbolAsync(string symbol)
+    {
+        return await _context.Portfolios
+            .Where(p => p.Symbol == symbol)
+            .ToListAsync();
+    }
+
     public async Task AddAsync(Portfolio portfolio)
     {
         await _context.Portfolios.AddAsync(portfolio);
