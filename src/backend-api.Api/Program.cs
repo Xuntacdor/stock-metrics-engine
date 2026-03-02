@@ -2,6 +2,7 @@ using System.Text;
 using backend_api.Api.Data;
 using backend_api.Api.Repositories;
 using backend_api.Api.Services;
+using backend_api.Api.Workers;
 using DotNetEnv;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
@@ -109,6 +110,12 @@ builder.Services.AddScoped<IOrderService, OrderService>();
 builder.Services.AddScoped<IPortfolioService, PortfolioService>();
 builder.Services.AddScoped<ITransactionService, TransactionService>();
 builder.Services.AddScoped<IWalletService, WalletService>();
+
+
+builder.Services.AddScoped<ICorporateActionRepository, CorporateActionRepository>();
+builder.Services.AddScoped<ICorporateActionService, CorporateActionService>();
+
+builder.Services.AddHostedService<DividendPayoutWorker>();
 
 var app = builder.Build();
 
