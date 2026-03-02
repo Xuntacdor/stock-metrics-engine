@@ -147,4 +147,45 @@ CREATE TABLE MarginRatios (
 
     CONSTRAINT FK_Margin_Symbols FOREIGN KEY (Symbol) REFERENCES Symbols(Symbol)
 );
+
+/* ==========================================================================
+   PHẦN 3: MODULE CORPORATE ACTIONS (QUYỀN & CỔ TỨC)
+   ========================================================================== */
+
+-- 9. Bảng CorporateActions (Lịch sự kiện Quyền & Cổ tức)
+IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'CorporateActions')
+CREATE TABLE CorporateActions (
+    ActionID INT PRIMARY KEY IDENTITY(1,1),
+    Symbol VARCHAR(10) NOT NULL,
+
+    -- Loại sự kiện: 'CASH_DIVIDEND' | 'STOCK_DIVIDEND' | 'BONUS_SHARE'
+    ActionType VARCHAR(20) NOT NULL,
+
+    -- Ngày đăng ký cuối cùng (Record Date / GDKHQ):
+    -- Ai giữ cổ phiếu TRƯỚC ngày này sẽ được nhận quyền.
+    RecordDate DATE NOT NULL,
+
+    -- Ngày thực trả cổ tức (Payment Date):
+    -- Ngày Worker chạy và ghi có vào tài khoản.
+    PaymentDate DATE NOT NULL,
+
+    -- Tỷ lệ chi trả:
+    -- CASH_DIVIDEND : số VNĐ trên 1 cổ phiếu (vd: 1000 = 1.000đ/cp)
+    -- STOCK_DIVIDEND / BONUS_SHARE : tỷ lệ cổ phiếu thưởng (vd: 0.10 = 10%)
+    Ratio DECIMAL(18, 4) NOT NULL,
+
+    -- Trạng thái: 'PENDING' | 'PROCESSED' | 'CANCELLED'
+    Status VARCHAR(20) NOT NULL DEFAULT 'PENDING',
+
+    ProcessedAt DATETIME NULL,
+    Note NVARCHAR(500) NULL,
+    CreatedAt DATETIME NOT NULL DEFAULT GETDATE(),
+
+    CONSTRAINT FK_CorporateActions_Symbols FOREIGN KEY (Symbol) REFERENCES Symbols(Symbol)
+);
+
+-- Index để Worker tra cứu nhanh theo PaymentDate + Status
+IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'IX_CorporateActions_PaymentDate_Status')
+CREATE NONCLUSTERED INDEX IX_CorporateActions_PaymentDate_Status
+    ON CorporateActions(PaymentDate, Status);
 GO

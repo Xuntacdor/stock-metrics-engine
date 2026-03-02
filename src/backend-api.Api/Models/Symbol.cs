@@ -18,4 +18,6 @@ public partial class Symbol
     public virtual ICollection<Order> Orders { get; set; } = new List<Order>();
 
     public virtual ICollection<Portfolio> Portfolios { get; set; } = new List<Portfolio>();
+
+    public virtual ICollection<CorporateAction> CorporateActions { get; set; } = new List<CorporateAction>();
 }

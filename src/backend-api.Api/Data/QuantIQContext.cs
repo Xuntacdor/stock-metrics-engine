@@ -16,6 +16,8 @@ public partial class QuantIQContext : DbContext
     {
     }
 
+    public virtual DbSet<CorporateAction> CorporateActions { get; set; }
+
     public virtual DbSet<Candle> Candles { get; set; }
 
     public virtual DbSet<CashWallet> CashWallets { get; set; }
@@ -36,6 +38,38 @@ public partial class QuantIQContext : DbContext
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        modelBuilder.Entity<CorporateAction>(entity =>
+        {
+            entity.HasKey(e => e.ActionId).HasName("PK__CorporateActions");
+
+            entity.ToTable("CorporateActions");
+
+            entity.HasIndex(e => new { e.PaymentDate, e.Status }, "IX_CorporateActions_PaymentDate_Status");
+
+            entity.Property(e => e.ActionId).HasColumnName("ActionID");
+            entity.Property(e => e.Symbol)
+                .HasMaxLength(10)
+                .IsUnicode(false);
+            entity.Property(e => e.ActionType)
+                .HasMaxLength(20)
+                .IsUnicode(false);
+            entity.Property(e => e.Ratio).HasColumnType("decimal(18, 4)");
+            entity.Property(e => e.Status)
+                .HasMaxLength(20)
+                .IsUnicode(false)
+                .HasDefaultValue("PENDING");
+            entity.Property(e => e.Note).HasMaxLength(500);
+            entity.Property(e => e.ProcessedAt).HasColumnType("datetime");
+            entity.Property(e => e.CreatedAt)
+                .HasDefaultValueSql("(getdate())")
+                .HasColumnType("datetime");
+
+            entity.HasOne(d => d.SymbolNavigation).WithMany(p => p.CorporateActions)
+                .HasForeignKey(d => d.Symbol)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_CorporateActions_Symbols");
+        });
+
         modelBuilder.Entity<Candle>(entity =>
         {
             entity.HasKey(e => new { e.Symbol, e.Timestamp });
