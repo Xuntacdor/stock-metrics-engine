@@ -21,10 +21,6 @@ public partial class User
     
     public DateTime? RefreshTokenExpiryTime { get; set; }
 
-    /// <summary>
-    /// Trạng thái KYC tổng hợp của user:
-    /// PENDING (chưa nộp hoặc đang chờ) | APPROVED | REJECTED
-    /// </summary>
     public string KycStatus { get; set; } = "PENDING";
 
     public virtual ICollection<Order> Orders { get; set; } = new List<Order>();

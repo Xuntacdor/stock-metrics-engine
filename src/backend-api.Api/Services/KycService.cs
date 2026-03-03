@@ -38,20 +38,15 @@ public class KycService : IKycService
         _logger = logger;
     }
 
-    // ─── Upload & OCR ────────────────────────────────────────────────────────
 
     public async Task<KycUploadResponse> UploadAndOcrAsync(string userId, IFormFile image)
     {
-        // 1. Validate file
         ValidateImageFile(image);
 
-        // 2. Lưu file vào server
         var savedPath = await SaveImageAsync(image, userId);
 
-        // 3. Gọi FPT.AI
         var ocrData = await CallFptAiOcrAsync(image);
 
-        // 4. Map vào model và lưu DB
         var doc = new KycDocument
         {
             UserId      = userId,
@@ -77,7 +72,6 @@ public class KycService : IKycService
         return MapToUploadResponse(doc, "Ảnh CCCD đã được nhận. Vui lòng chờ Admin xét duyệt.");
     }
 
-    // ─── Queries ─────────────────────────────────────────────────────────────
 
     public async Task<IEnumerable<KycDetailResponse>> GetByUserIdAsync(string userId)
     {
@@ -91,7 +85,6 @@ public class KycService : IKycService
         return docs.Select(MapToDetailResponse);
     }
 
-    // ─── Admin Review ─────────────────────────────────────────────────────────
 
     public async Task<KycDetailResponse> ReviewAsync(int kycId, KycReviewRequest request)
     {
@@ -114,7 +107,6 @@ public class KycService : IKycService
 
         await _kycRepo.UpdateAsync(doc);
 
-        // Đồng bộ KycStatus vào bảng Users
         var user = await _context.Users.FirstOrDefaultAsync(u => u.UserId == doc.UserId);
         if (user != null)
         {
@@ -129,7 +121,6 @@ public class KycService : IKycService
         return MapToDetailResponse(doc);
     }
 
-    // ─── Private Helpers ──────────────────────────────────────────────────────
 
     private static void ValidateImageFile(IFormFile image)
     {
@@ -146,7 +137,6 @@ public class KycService : IKycService
 
     private async Task<string> SaveImageAsync(IFormFile image, string userId)
     {
-        // Lưu vào wwwroot/kyc/{userId}/
         var folder = Path.Combine(_env.WebRootPath ?? "wwwroot", "kyc", userId);
         Directory.CreateDirectory(folder);
 
@@ -157,14 +147,10 @@ public class KycService : IKycService
         await using var stream = new FileStream(filePath, FileMode.Create);
         await image.CopyToAsync(stream);
 
-        // Trả về đường dẫn tương đối để lưu vào DB
         return Path.Combine("kyc", userId, fileName).Replace("\\", "/");
     }
 
-    /// <summary>
-    /// Gọi FPT.AI OCR API với multipart/form-data.
-    /// Trả về data object đầu tiên trong mảng data, hoặc null nếu thất bại.
-    /// </summary>
+    
     private async Task<FptAiOcrData?> CallFptAiOcrAsync(IFormFile image)
     {
         var apiKey = _config["FptAi:ApiKey"];
@@ -174,7 +160,6 @@ public class KycService : IKycService
         var client = _httpClientFactory.CreateClient("FptAi");
         client.DefaultRequestHeaders.Add("api-key", apiKey);
 
-        // Đọc lại stream từ đầu (stream đã bị đọc khi validate)
         image.OpenReadStream().Seek(0, SeekOrigin.Begin);
 
         using var content = new MultipartFormDataContent();
@@ -213,7 +198,6 @@ public class KycService : IKycService
         _  => "Vui lòng kiểm tra lại ảnh CCCD."
     };
 
-    // ─── Mappers ──────────────────────────────────────────────────────────────
 
     private static KycUploadResponse MapToUploadResponse(KycDocument doc, string message) => new()
     {

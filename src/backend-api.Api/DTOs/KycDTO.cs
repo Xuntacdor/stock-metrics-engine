@@ -1,8 +1,6 @@
 namespace backend_api.Api.DTOs;
 
-// ─── Response từ FPT.AI (raw) ───────────────────────────────────────────────
 
-/// <summary>Kết quả OCR mặt trước CCCD mới (12 số) hoặc CMND.</summary>
 public class FptAiOcrData
 {
     public string? id { get; set; }
@@ -41,12 +39,7 @@ public class FptAiOcrResponse
     public List<FptAiOcrData>? data { get; set; }
 }
 
-// ─── API Request / Response của hệ thống ────────────────────────────────────
 
-/// <summary>
-/// Response trả về cho client sau khi upload ảnh CCCD thành công.
-/// Bao gồm kết quả OCR đã trích xuất.
-/// </summary>
 public class KycUploadResponse
 {
     public int KycId { get; set; }
@@ -64,7 +57,6 @@ public class KycUploadResponse
     public string Message { get; set; } = string.Empty;
 }
 
-/// <summary>Thông tin KYC của một user (dùng cho Admin hoặc user tự xem).</summary>
 public class KycDetailResponse
 {
     public int KycId { get; set; }
@@ -85,12 +77,9 @@ public class KycDetailResponse
     public DateTime? ReviewedAt { get; set; }
 }
 
-/// <summary>Admin dùng request này để duyệt hoặc từ chối KYC.</summary>
 public class KycReviewRequest
 {
-    /// <summary>APPROVED hoặc REJECTED.</summary>
     public string Decision { get; set; } = null!;
 
-    /// <summary>Bắt buộc khi Decision = REJECTED.</summary>
     public string? RejectReason { get; set; }
 }
