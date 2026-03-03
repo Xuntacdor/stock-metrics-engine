@@ -189,3 +189,50 @@ IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'IX_CorporateActions_Payme
 CREATE NONCLUSTERED INDEX IX_CorporateActions_PaymentDate_Status
     ON CorporateActions(PaymentDate, Status);
 GO
+
+/* ==========================================================================
+   PHẦN 4: MODULE E-KYC (ĐỊNH DANH KHÁCH HÀNG)
+   ========================================================================== */
+
+-- Thêm cột KycStatus vào Users (nếu chưa tồn tại)
+IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('Users') AND name = 'KycStatus')
+    ALTER TABLE Users ADD KycStatus VARCHAR(20) NOT NULL DEFAULT 'PENDING';
+GO
+
+-- 10. Bảng KycDocuments (Lịch sử nộp CCCD & kết quả OCR)
+IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'KycDocuments')
+CREATE TABLE KycDocuments (
+    KycID       INT PRIMARY KEY IDENTITY(1,1),
+    UserID      VARCHAR(50) NOT NULL,
+
+    -- ── Thông tin OCR từ FPT.AI ─────────────────────────────────────────────
+    CardNumber  VARCHAR(20)     NULL,     -- Số CMND/CCCD (9 hoặc 12 số)
+    FullName    NVARCHAR(200)   NULL,
+    DateOfBirth VARCHAR(20)     NULL,     -- Giữ dạng string như FPT.AI trả về
+    Sex         VARCHAR(10)     NULL,
+    Nationality NVARCHAR(50)    NULL,
+    HomeTown    NVARCHAR(500)   NULL,
+    [Address]   NVARCHAR(500)   NULL,
+    ExpiryDate  VARCHAR(20)     NULL,     -- Chỉ có trên CCCD 12 số
+    CardType    VARCHAR(20)     NULL,     -- old | old_back | new | new_back
+
+    -- ── Thông tin upload & duyệt ─────────────────────────────────────────────
+    ImagePath   VARCHAR(500)    NOT NULL, -- Đường dẫn tương đối (kyc/{userId}/file.jpg)
+    Status      VARCHAR(20)     NOT NULL DEFAULT 'PENDING',  -- PENDING | APPROVED | REJECTED
+    RejectReason NVARCHAR(500)  NULL,
+    SubmittedAt DATETIME        NOT NULL DEFAULT GETUTCDATE(),
+    ReviewedAt  DATETIME        NULL,
+
+    CONSTRAINT FK_KycDocuments_Users FOREIGN KEY (UserID) REFERENCES Users(UserID)
+);
+GO
+
+-- Index tra cứu nhanh theo UserID
+IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'IX_KycDocuments_UserID')
+CREATE NONCLUSTERED INDEX IX_KycDocuments_UserID ON KycDocuments(UserID);
+GO
+
+-- Index tra cứu nhanh theo Status (Admin lọc PENDING)
+IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'IX_KycDocuments_Status')
+CREATE NONCLUSTERED INDEX IX_KycDocuments_Status ON KycDocuments(Status);
+GO
