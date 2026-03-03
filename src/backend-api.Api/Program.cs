@@ -117,6 +117,11 @@ builder.Services.AddScoped<ICorporateActionService, CorporateActionService>();
 
 builder.Services.AddHostedService<DividendPayoutWorker>();
 
+// ─── E-KYC ───────────────────────────────────────────────────────────────────
+builder.Services.AddHttpClient("FptAi");
+builder.Services.AddScoped<IKycRepository, KycRepository>();
+builder.Services.AddScoped<IKycService, KycService>();
+
 var app = builder.Build();
 
 if (app.Environment.IsDevelopment())
@@ -126,6 +131,7 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+app.UseStaticFiles(); // serve file ảnh KYC từ wwwroot/
 
 app.UseAuthentication();
 app.UseAuthorization();
