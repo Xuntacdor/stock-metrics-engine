@@ -18,6 +18,8 @@ public partial class QuantIQContext : DbContext
 
     public virtual DbSet<CorporateAction> CorporateActions { get; set; }
 
+    public virtual DbSet<KycDocument> KycDocuments { get; set; }
+
     public virtual DbSet<Candle> Candles { get; set; }
 
     public virtual DbSet<CashWallet> CashWallets { get; set; }
@@ -280,6 +282,63 @@ public partial class QuantIQContext : DbContext
                 .IsUnicode(false);
             entity.Property(e => e.PasswordHash).IsUnicode(false);
             entity.Property(e => e.Username).HasMaxLength(100);
+            entity.Property(e => e.KycStatus)
+                .HasMaxLength(20)
+                .IsUnicode(false)
+                .HasDefaultValue("PENDING");
+        });
+
+        modelBuilder.Entity<KycDocument>(entity =>
+        {
+            entity.HasKey(e => e.KycId).HasName("PK__KycDocuments");
+
+            entity.ToTable("KycDocuments");
+
+            entity.HasIndex(e => e.UserId, "IX_KycDocuments_UserID");
+            entity.HasIndex(e => e.Status, "IX_KycDocuments_Status");
+
+            entity.Property(e => e.KycId).HasColumnName("KycID");
+            entity.Property(e => e.UserId)
+                .HasMaxLength(50)
+                .IsUnicode(false)
+                .HasColumnName("UserID");
+            entity.Property(e => e.CardNumber)
+                .HasMaxLength(20)
+                .IsUnicode(false);
+            entity.Property(e => e.FullName).HasMaxLength(200);
+            entity.Property(e => e.DateOfBirth)
+                .HasMaxLength(20)
+                .IsUnicode(false);
+            entity.Property(e => e.Sex)
+                .HasMaxLength(10)
+                .IsUnicode(false);
+            entity.Property(e => e.Nationality).HasMaxLength(50);
+            entity.Property(e => e.HomeTown).HasMaxLength(500);
+            entity.Property(e => e.Address).HasMaxLength(500);
+            entity.Property(e => e.ExpiryDate)
+                .HasMaxLength(20)
+                .IsUnicode(false);
+            entity.Property(e => e.CardType)
+                .HasMaxLength(20)
+                .IsUnicode(false);
+            entity.Property(e => e.ImagePath)
+                .HasMaxLength(500)
+                .IsUnicode(false);
+            entity.Property(e => e.Status)
+                .HasMaxLength(20)
+                .IsUnicode(false)
+                .HasDefaultValue("PENDING");
+            entity.Property(e => e.RejectReason).HasMaxLength(500);
+            entity.Property(e => e.SubmittedAt)
+                .HasDefaultValueSql("(getutcdate())")
+                .HasColumnType("datetime");
+            entity.Property(e => e.ReviewedAt).HasColumnType("datetime");
+
+            entity.HasOne(d => d.User)
+                .WithMany(p => p.KycDocuments)
+                .HasForeignKey(d => d.UserId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_KycDocuments_Users");
         });
 
         OnModelCreatingPartial(modelBuilder);
