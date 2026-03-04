@@ -33,6 +33,7 @@ public class TokenService : ITokenService
         {
             new Claim(JwtRegisteredClaimNames.Sub, user.UserId),
             new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
+            new Claim(ClaimTypes.Role, user.Role)
         };
 
         var expiresAt = DateTime.UtcNow.AddMinutes(expiresInMinutes);

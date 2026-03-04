@@ -25,6 +25,8 @@ public partial class User
 
     public string AccountStatus { get; set; } = "INACTIVE";
 
+    public string Role { get; set; } = "User";
+
     public virtual ICollection<Order> Orders { get; set; } = new List<Order>();
 
     public virtual ICollection<Portfolio> Portfolios { get; set; } = new List<Portfolio>();
