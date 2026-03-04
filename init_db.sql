@@ -242,3 +242,40 @@ GO
 IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'IX_KycDocuments_Status')
 CREATE NONCLUSTERED INDEX IX_KycDocuments_Status ON KycDocuments(Status);
 GO
+
+/* ==========================================================================
+   PHẦN 5: MODULE THANH TOÁN (PAYOS PAYMENT GATEWAY)
+   ========================================================================== */
+
+-- 11. Bảng DepositRequests (Lệnh nạp tiền qua PayOS)
+IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'DepositRequests')
+CREATE TABLE DepositRequests (
+    DepositID    BIGINT PRIMARY KEY IDENTITY(1,1),
+    UserID       VARCHAR(50)     NOT NULL,
+
+    -- OrderCode gửi sang PayOS: unix timestamp ms % 9,999,999,999,999
+    -- UNIQUE để đảm bảo idempotency (không cộng tiền 2 lần)
+    OrderCode    BIGINT          NOT NULL,
+
+    Amount       DECIMAL(18, 4)  NOT NULL,       -- Số tiền nạp (VNĐ)
+
+    -- Trạng thái: PENDING | PAID | CANCELLED
+    Status       VARCHAR(20)     NOT NULL DEFAULT 'PENDING',
+
+    CheckoutUrl  VARCHAR(1000)   NULL,            -- Link thanh toán PayOS
+    CreatedAt    DATETIME        NOT NULL DEFAULT GETUTCDATE(),
+    PaidAt       DATETIME        NULL,            -- Set khi nhận webhook PAID
+
+    CONSTRAINT FK_DepositRequests_Users FOREIGN KEY (UserID) REFERENCES Users(UserID),
+    -- UNIQUE trên OrderCode: core của cơ chế chống double-credit
+    CONSTRAINT UQ_DepositRequests_OrderCode UNIQUE (OrderCode)
+);
+GO
+
+IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'IX_DepositRequests_UserID')
+CREATE NONCLUSTERED INDEX IX_DepositRequests_UserID ON DepositRequests(UserID);
+GO
+
+IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'IX_DepositRequests_Status')
+CREATE NONCLUSTERED INDEX IX_DepositRequests_Status ON DepositRequests(Status);
+GO
