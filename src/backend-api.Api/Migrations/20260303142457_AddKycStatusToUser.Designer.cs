@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using backend_api.Api.Data;
 
@@ -11,9 +12,11 @@ using backend_api.Api.Data;
 namespace backend_api.Api.Migrations
 {
     [DbContext(typeof(QuantIQContext))]
-    partial class QuantIQContextModelSnapshot : ModelSnapshot
+    [Migration("20260303142457_AddKycStatusToUser")]
+    partial class AddKycStatusToUser
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -499,14 +502,6 @@ namespace backend_api.Api.Migrations
                         .IsUnicode(false)
                         .HasColumnType("varchar(50)")
                         .HasColumnName("UserID");
-
-                    b.Property<string>("AccountStatus")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasMaxLength(20)
-                        .IsUnicode(false)
-                        .HasColumnType("varchar(20)")
-                        .HasDefaultValue("INACTIVE");
 
                     b.Property<DateTime?>("CreatedAt")
                         .ValueGeneratedOnAdd()

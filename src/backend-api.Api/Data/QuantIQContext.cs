@@ -286,6 +286,10 @@ public partial class QuantIQContext : DbContext
                 .HasMaxLength(20)
                 .IsUnicode(false)
                 .HasDefaultValue("PENDING");
+            entity.Property(e => e.AccountStatus)
+                .HasMaxLength(20)
+                .IsUnicode(false)
+                .HasDefaultValue("INACTIVE");
         });
 
         modelBuilder.Entity<KycDocument>(entity =>
