@@ -375,3 +375,22 @@ msbuild.wrn
 
 # Visual Studio 2015
 .vs/
+# wwwroot - Static assets
+wwwroot/
+!wwwroot/.gitkeep
+wwwroot/css/
+wwwroot/js/
+wwwroot/images/
+wwwroot/fonts/
+# Angular
+frontend/dist/
+frontend/node_modules/
+
+# Docker
+*.dockerfile
+docker-compose.override.yml
+
+# Logs
+logs/
+*.log
+
