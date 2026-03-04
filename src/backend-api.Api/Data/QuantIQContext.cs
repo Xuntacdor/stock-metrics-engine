@@ -292,6 +292,10 @@ public partial class QuantIQContext : DbContext
                 .HasMaxLength(20)
                 .IsUnicode(false)
                 .HasDefaultValue("INACTIVE");
+            entity.Property(e => e.Role)
+                .HasMaxLength(20)
+                .IsUnicode(false)
+                .HasDefaultValue("User");
         });
 
         modelBuilder.Entity<KycDocument>(entity =>

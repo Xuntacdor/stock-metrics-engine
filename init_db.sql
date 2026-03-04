@@ -205,6 +205,20 @@ IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('Users') AN
     ALTER TABLE Users ADD AccountStatus VARCHAR(20) NOT NULL DEFAULT 'INACTIVE';
 GO
 
+-- Thêm cột Role vào Users (nếu chưa tồn tại)
+-- "User" (mặc định) hoặc "Admin"
+IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('Users') AND name = 'Role')
+    ALTER TABLE Users ADD Role VARCHAR(20) NOT NULL DEFAULT 'User';
+GO
+
+-- Thêm cột RefreshToken và RefreshTokenExpiryTime nếu chưa có
+IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('Users') AND name = 'RefreshToken')
+    ALTER TABLE Users ADD RefreshToken VARCHAR(MAX) NULL;
+GO
+IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('Users') AND name = 'RefreshTokenExpiryTime')
+    ALTER TABLE Users ADD RefreshTokenExpiryTime DATETIME NULL;
+GO
+
 -- 10. Bảng KycDocuments (Lịch sử nộp CCCD & kết quả OCR)
 IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'KycDocuments')
 CREATE TABLE KycDocuments (
