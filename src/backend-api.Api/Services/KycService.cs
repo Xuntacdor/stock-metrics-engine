@@ -79,6 +79,37 @@ public class KycService : IKycService
         return docs.Select(MapToDetailResponse);
     }
 
+    public async Task<UserProfileResponse> GetMyProfileAsync(string userId)
+    {
+        var user = await _context.Users
+            .Include(u => u.KycDocuments)
+            .FirstOrDefaultAsync(u => u.UserId == userId)
+            ?? throw new KeyNotFoundException("Không tìm thấy tài khoản.");
+
+        var latestKyc = user.KycDocuments
+            .OrderByDescending(k => k.SubmittedAt)
+            .FirstOrDefault();
+
+        return new UserProfileResponse
+        {
+            UserId        = user.UserId,
+            Username      = user.Username,
+            Email         = user.Email,
+            CreatedAt     = user.CreatedAt,
+            AccountStatus = user.AccountStatus,
+            KycStatus     = user.KycStatus,
+            NextStep      = ResolveNextStep(user.AccountStatus, user.KycStatus, latestKyc?.Status),
+            LatestKyc     = latestKyc == null ? null : new LatestKycInfo
+            {
+                KycId        = latestKyc.KycId,
+                Status       = latestKyc.Status,
+                RejectReason = latestKyc.RejectReason,
+                SubmittedAt  = latestKyc.SubmittedAt,
+                ReviewedAt   = latestKyc.ReviewedAt
+            }
+        };
+    }
+
     public async Task<IEnumerable<KycDetailResponse>> GetPendingAsync()
     {
         var docs = await _kycRepo.GetPendingAsync();
@@ -92,7 +123,7 @@ public class KycService : IKycService
         if (!valid.Contains(request.Decision, StringComparer.OrdinalIgnoreCase))
             throw new ArgumentException("Decision phải là APPROVED hoặc REJECTED.");
 
-        if (request.Decision == "REJECTED" && string.IsNullOrWhiteSpace(request.RejectReason))
+        if (request.Decision.ToUpper() == "REJECTED" && string.IsNullOrWhiteSpace(request.RejectReason))
             throw new ArgumentException("Phải cung cấp lý do khi từ chối KYC.");
 
         var doc = await _kycRepo.GetByIdAsync(kycId)
@@ -101,22 +132,30 @@ public class KycService : IKycService
         if (doc.Status != "PENDING")
             throw new InvalidOperationException($"KYC #{kycId} đã được xử lý (Status = {doc.Status}).");
 
-        doc.Status      = request.Decision.ToUpper();
+        doc.Status       = request.Decision.ToUpper();
         doc.RejectReason = request.RejectReason;
-        doc.ReviewedAt  = DateTime.UtcNow;
+        doc.ReviewedAt   = DateTime.UtcNow;
 
         await _kycRepo.UpdateAsync(doc);
 
+        // ─── Đồng bộ trạng thái lên bảng Users ─────────────────────────────
         var user = await _context.Users.FirstOrDefaultAsync(u => u.UserId == doc.UserId);
         if (user != null)
         {
             user.KycStatus = doc.Status;
+
+            // Khi APPROVED → Kích hoạt tài khoản để user được phép giao dịch
+            // Khi REJECTED → Giữ INACTIVE, user phải nộp lại CCCD
+            user.AccountStatus = doc.Status == "APPROVED" ? "ACTIVE" : "INACTIVE";
+
             _context.Users.Update(user);
         }
 
         await _kycRepo.SaveChangesAsync();
 
-        _logger.LogInformation("KYC #{KycId} reviewed: {Decision} by admin.", kycId, doc.Status);
+        _logger.LogInformation(
+            "KYC #{KycId} reviewed: {Decision} → AccountStatus={AccountStatus}.",
+            kycId, doc.Status, user?.AccountStatus);
 
         return MapToDetailResponse(doc);
     }
@@ -235,4 +274,72 @@ public class KycService : IKycService
         SubmittedAt  = doc.SubmittedAt,
         ReviewedAt   = doc.ReviewedAt
     };
+
+    // ─── Admin suspend / unsuspend ────────────────────────────────────────────
+
+    public async Task<UserProfileResponse> SuspendAccountAsync(string targetUserId, SuspendAccountRequest request)
+    {
+        var allowed = new[] { "SUSPENDED", "ACTIVE" };
+        if (!allowed.Contains(request.AccountStatus, StringComparer.OrdinalIgnoreCase))
+            throw new ArgumentException("AccountStatus phải là SUSPENDED hoặc ACTIVE.");
+
+        var user = await _context.Users
+            .Include(u => u.KycDocuments)
+            .FirstOrDefaultAsync(u => u.UserId == targetUserId)
+            ?? throw new KeyNotFoundException($"Không tìm thấy user #{targetUserId}.");
+
+        var prev = user.AccountStatus;
+        user.AccountStatus = request.AccountStatus.ToUpper();
+        _context.Users.Update(user);
+        await _context.SaveChangesAsync();
+
+        _logger.LogInformation(
+            "Admin changed AccountStatus of user {UserId}: {Prev} → {New}. Reason: {Reason}",
+            targetUserId, prev, user.AccountStatus, request.Reason);
+
+        var latestKyc = user.KycDocuments.OrderByDescending(k => k.SubmittedAt).FirstOrDefault();
+
+        return new UserProfileResponse
+        {
+            UserId        = user.UserId,
+            Username      = user.Username,
+            Email         = user.Email,
+            CreatedAt     = user.CreatedAt,
+            AccountStatus = user.AccountStatus,
+            KycStatus     = user.KycStatus,
+            NextStep      = ResolveNextStep(user.AccountStatus, user.KycStatus, latestKyc?.Status),
+            LatestKyc     = latestKyc == null ? null : new LatestKycInfo
+            {
+                KycId        = latestKyc.KycId,
+                Status       = latestKyc.Status,
+                RejectReason = latestKyc.RejectReason,
+                SubmittedAt  = latestKyc.SubmittedAt,
+                ReviewedAt   = latestKyc.ReviewedAt
+            }
+        };
+    }
+
+    // ─── Helper: hướng dẫn bước tiếp theo cho user ───────────────────────────
+
+    private static string ResolveNextStep(string accountStatus, string kycStatus, string? latestKycStatus)
+        => (accountStatus, kycStatus, latestKycStatus) switch
+        {
+            // Tài khoản đang bị khóa
+            ("SUSPENDED", _, _)         => "Tài khoản của bạn đang bị tạm khóa. Vui lòng liên hệ bộ phận hỗ trợ.",
+
+            // Tài khoản đã ACTIVE → hoàn tất
+            ("ACTIVE", _, _)            => "Tài khoản đã được xác minh. Bạn có thể bắt đầu giao dịch.",
+
+            // Chưa nộp KYC lần nào
+            (_, "PENDING", null)        => "Vui lòng upload ảnh CCCD để xác minh danh tính.",
+
+            // Đã nộp, đang chờ Admin duyệt
+            (_, "PENDING", "PENDING")   => "Hồ sơ CCCD đang được xem xét. Vui lòng chờ 1–2 ngày làm việc.",
+
+            // Bị từ chối → nộp lại
+            (_, "REJECTED", _)          => "Hồ sơ CCCD bị từ chối. Vui lòng upload lại ảnh CCCD rõ nét hơn.",
+
+            // Các trường hợp khác
+            _                           => "Vui lòng liên hệ bộ phận hỗ trợ để được trợ giúp."
+        };
 }
