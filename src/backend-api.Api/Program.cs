@@ -132,6 +132,16 @@ builder.Services.AddScoped<IPaymentService, PaymentService>();
 
 var app = builder.Build();
 
+try
+{
+    await DbSeeder.SeedAsync(app.Services);
+}
+catch (Exception ex)
+{
+    var logger = app.Services.GetRequiredService<ILogger<Program>>();
+    logger.LogError(ex, "[DbSeeder] Lỗi khi seed dữ liệu. App sẽ tiếp tục chạy.");
+}
+
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
