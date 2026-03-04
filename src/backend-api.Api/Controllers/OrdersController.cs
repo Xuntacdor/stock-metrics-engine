@@ -1,4 +1,5 @@
 using backend_api.Api.DTOs;
+using backend_api.Api.Filters;
 using backend_api.Api.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -9,6 +10,7 @@ namespace backend_api.Api.Controllers;
 [Route("api/orders")]
 [ApiController]
 [Authorize]
+[RequireActiveAccount]  // Bắt buộc KYC APPROVED mới được đặt lệnh
 public class OrdersController : ControllerBase
 {
     private readonly IOrderService _orderService;

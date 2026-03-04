@@ -1,4 +1,5 @@
 using backend_api.Api.DTOs;
+using backend_api.Api.Filters;
 using backend_api.Api.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -31,6 +32,7 @@ public class WalletController : ControllerBase
     }
 
     [HttpPost("deposit")]
+    [RequireActiveAccount]  // Chỉ ACTIVE mới được nạp tiền
     public async Task<IActionResult> Deposit([FromBody] DepositWithdrawRequest request)
     {
         try
@@ -43,6 +45,7 @@ public class WalletController : ControllerBase
     }
 
     [HttpPost("withdraw")]
+    [RequireActiveAccount]  // Chỉ ACTIVE mới được rút tiền
     public async Task<IActionResult> Withdraw([FromBody] DepositWithdrawRequest request)
     {
         try
