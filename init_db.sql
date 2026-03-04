@@ -199,6 +199,12 @@ IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('Users') AN
     ALTER TABLE Users ADD KycStatus VARCHAR(20) NOT NULL DEFAULT 'PENDING';
 GO
 
+-- Thêm cột AccountStatus vào Users (nếu chưa tồn tại)
+-- INACTIVE: mới đăng ký, chưa KYC | ACTIVE: đã KYC thành công | SUSPENDED: bị khóa
+IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('Users') AND name = 'AccountStatus')
+    ALTER TABLE Users ADD AccountStatus VARCHAR(20) NOT NULL DEFAULT 'INACTIVE';
+GO
+
 -- 10. Bảng KycDocuments (Lịch sử nộp CCCD & kết quả OCR)
 IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'KycDocuments')
 CREATE TABLE KycDocuments (
