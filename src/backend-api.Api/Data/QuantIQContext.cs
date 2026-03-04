@@ -20,6 +20,8 @@ public partial class QuantIQContext : DbContext
 
     public virtual DbSet<KycDocument> KycDocuments { get; set; }
 
+    public virtual DbSet<DepositRequest> DepositRequests { get; set; }
+
     public virtual DbSet<Candle> Candles { get; set; }
 
     public virtual DbSet<CashWallet> CashWallets { get; set; }
@@ -343,6 +345,42 @@ public partial class QuantIQContext : DbContext
                 .HasForeignKey(d => d.UserId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK_KycDocuments_Users");
+        });
+
+        modelBuilder.Entity<DepositRequest>(entity =>
+        {
+            entity.HasKey(e => e.DepositId).HasName("PK__DepositRequests");
+
+            entity.ToTable("DepositRequests");
+
+            // OrderCode phải UNIQUE — đảm bảo idempotency
+            entity.HasIndex(e => e.OrderCode, "UQ_DepositRequests_OrderCode").IsUnique();
+            entity.HasIndex(e => e.UserId, "IX_DepositRequests_UserID");
+            entity.HasIndex(e => e.Status, "IX_DepositRequests_Status");
+
+            entity.Property(e => e.DepositId).HasColumnName("DepositID");
+            entity.Property(e => e.UserId)
+                .HasMaxLength(50)
+                .IsUnicode(false)
+                .HasColumnName("UserID");
+            entity.Property(e => e.Amount).HasColumnType("decimal(18, 4)");
+            entity.Property(e => e.Status)
+                .HasMaxLength(20)
+                .IsUnicode(false)
+                .HasDefaultValue("PENDING");
+            entity.Property(e => e.CheckoutUrl)
+                .HasMaxLength(1000)
+                .IsUnicode(false);
+            entity.Property(e => e.CreatedAt)
+                .HasDefaultValueSql("(getutcdate())")
+                .HasColumnType("datetime");
+            entity.Property(e => e.PaidAt).HasColumnType("datetime");
+
+            entity.HasOne(d => d.User)
+                .WithMany(p => p.DepositRequests)
+                .HasForeignKey(d => d.UserId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_DepositRequests_Users");
         });
 
         OnModelCreatingPartial(modelBuilder);
