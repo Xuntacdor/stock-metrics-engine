@@ -122,7 +122,6 @@ builder.Services.AddHttpClient("FptAi");
 builder.Services.AddScoped<IKycRepository, KycRepository>();
 builder.Services.AddScoped<IKycService, KycService>();
 
-// ─── PayOS Payment Gateway ────────────────────────────────────────────────────
 var payOsClientId    = builder.Configuration["PayOS:ClientId"]    ?? throw new InvalidOperationException("PayOS:ClientId is not configured.");
 var payOsApiKey      = builder.Configuration["PayOS:ApiKey"]      ?? throw new InvalidOperationException("PayOS:ApiKey is not configured.");
 var payOsChecksumKey = builder.Configuration["PayOS:ChecksumKey"] ?? throw new InvalidOperationException("PayOS:ChecksumKey is not configured.");

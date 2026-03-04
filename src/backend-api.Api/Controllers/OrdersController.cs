@@ -10,7 +10,7 @@ namespace backend_api.Api.Controllers;
 [Route("api/orders")]
 [ApiController]
 [Authorize]
-[RequireActiveAccount]  // Bắt buộc KYC APPROVED mới được đặt lệnh
+[RequireActiveAccount]  
 public class OrdersController : ControllerBase
 {
     private readonly IOrderService _orderService;

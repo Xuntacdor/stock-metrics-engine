@@ -138,14 +138,11 @@ public class KycService : IKycService
 
         await _kycRepo.UpdateAsync(doc);
 
-        // ─── Đồng bộ trạng thái lên bảng Users ─────────────────────────────
         var user = await _context.Users.FirstOrDefaultAsync(u => u.UserId == doc.UserId);
         if (user != null)
         {
             user.KycStatus = doc.Status;
 
-            // Khi APPROVED → Kích hoạt tài khoản để user được phép giao dịch
-            // Khi REJECTED → Giữ INACTIVE, user phải nộp lại CCCD
             user.AccountStatus = doc.Status == "APPROVED" ? "ACTIVE" : "INACTIVE";
 
             _context.Users.Update(user);
@@ -275,7 +272,6 @@ public class KycService : IKycService
         ReviewedAt   = doc.ReviewedAt
     };
 
-    // ─── Admin suspend / unsuspend ────────────────────────────────────────────
 
     public async Task<UserProfileResponse> SuspendAccountAsync(string targetUserId, SuspendAccountRequest request)
     {
@@ -319,27 +315,20 @@ public class KycService : IKycService
         };
     }
 
-    // ─── Helper: hướng dẫn bước tiếp theo cho user ───────────────────────────
 
     private static string ResolveNextStep(string accountStatus, string kycStatus, string? latestKycStatus)
         => (accountStatus, kycStatus, latestKycStatus) switch
         {
-            // Tài khoản đang bị khóa
             ("SUSPENDED", _, _)         => "Tài khoản của bạn đang bị tạm khóa. Vui lòng liên hệ bộ phận hỗ trợ.",
 
-            // Tài khoản đã ACTIVE → hoàn tất
             ("ACTIVE", _, _)            => "Tài khoản đã được xác minh. Bạn có thể bắt đầu giao dịch.",
 
-            // Chưa nộp KYC lần nào
             (_, "PENDING", null)        => "Vui lòng upload ảnh CCCD để xác minh danh tính.",
 
-            // Đã nộp, đang chờ Admin duyệt
             (_, "PENDING", "PENDING")   => "Hồ sơ CCCD đang được xem xét. Vui lòng chờ 1–2 ngày làm việc.",
 
-            // Bị từ chối → nộp lại
             (_, "REJECTED", _)          => "Hồ sơ CCCD bị từ chối. Vui lòng upload lại ảnh CCCD rõ nét hơn.",
 
-            // Các trường hợp khác
             _                           => "Vui lòng liên hệ bộ phận hỗ trợ để được trợ giúp."
         };
 }

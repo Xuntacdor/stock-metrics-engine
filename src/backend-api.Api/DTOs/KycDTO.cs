@@ -84,10 +84,7 @@ public class KycReviewRequest
     public string? RejectReason { get; set; }
 }
 
-/// <summary>
-/// Thông tin profile tổng hợp của user hiện tại.
-/// Trả về từ GET /api/me
-/// </summary>
+
 public class UserProfileResponse
 {
     public string UserId { get; set; } = null!;
@@ -95,18 +92,16 @@ public class UserProfileResponse
     public string? Email { get; set; }
     public DateTime? CreatedAt { get; set; }
 
-    // ─── Trạng thái tài khoản & KYC ──────────────────────────────────────
 
-    /// <summary>INACTIVE | ACTIVE | SUSPENDED</summary>
     public string AccountStatus { get; set; } = null!;
 
-    /// <summary>PENDING | APPROVED | REJECTED</summary>
+   
     public string KycStatus { get; set; } = null!;
 
-    /// <summary>Hướng dẫn bước tiếp theo cho user dựa trên trạng thái hiện tại.</summary>
+  
     public string NextStep { get; set; } = null!;
 
-    /// <summary>Thông tin bản KYC mới nhất (nếu có).</summary>
+   
     public LatestKycInfo? LatestKyc { get; set; }
 }
 
@@ -119,10 +114,10 @@ public class LatestKycInfo
     public DateTime? ReviewedAt { get; set; }
 }
 
-/// <summary>Admin suspend/unsuspend một tài khoản.</summary>
+
 public class SuspendAccountRequest
 {
-    /// <summary>SUSPENDED hoặc ACTIVE.</summary>
+
     public string AccountStatus { get; set; } = null!;
 
     public string? Reason { get; set; }

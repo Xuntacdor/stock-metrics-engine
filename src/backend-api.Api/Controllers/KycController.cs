@@ -18,14 +18,7 @@ public class KycController : ControllerBase
         _kycService = kycService;
     }
 
-    // ──────────────────────────────────────────────────────────────────────────
-    // USER ENDPOINTS
-    // ──────────────────────────────────────────────────────────────────────────
-
-    /// <summary>
-    /// User upload 1 ảnh mặt trước CCCD để đăng ký KYC.
-    /// Hệ thống sẽ gọi FPT.AI OCR và lưu kết quả với trạng thái PENDING.
-    /// </summary>
+ 
     [HttpPost("upload")]
     [Consumes("multipart/form-data")]
     public async Task<IActionResult> Upload([FromForm] IFormFile image)
@@ -57,7 +50,6 @@ public class KycController : ControllerBase
         }
     }
 
-    /// <summary>User xem lịch sử các lần nộp KYC của chính mình.</summary>
     [HttpGet("my")]
     public async Task<IActionResult> GetMyKyc()
     {
@@ -68,11 +60,7 @@ public class KycController : ControllerBase
         return Ok(result);
     }
 
-    /// <summary>
-    /// User xem thông tin profile + trạng thái tài khoản.
-    /// Frontend dùng endpoint này để biết user ở bước nào trong quy trình KYC
-    /// và hiển thị hướng dẫn phù hợp (NextStep).
-    /// </summary>
+  
     [HttpGet("/api/me")]
     public async Task<IActionResult> GetMyProfile()
     {
@@ -90,11 +78,7 @@ public class KycController : ControllerBase
         }
     }
 
-    // ──────────────────────────────────────────────────────────────────────────
-    // ADMIN ENDPOINTS
-    // ──────────────────────────────────────────────────────────────────────────
-
-    /// <summary>Admin lấy danh sách tất cả KYC đang PENDING cần xét duyệt.</summary>
+   
     [HttpGet("pending")]
     [Authorize(Roles = "Admin")]
     public async Task<IActionResult> GetPending()
@@ -103,11 +87,7 @@ public class KycController : ControllerBase
         return Ok(result);
     }
 
-    /// <summary>
-    /// Admin duyệt (APPROVED) hoặc từ chối (REJECTED) một bản KYC.
-    /// Khi APPROVED → AccountStatus của User tự động chuyển sang ACTIVE.
-    /// Khi REJECTED → AccountStatus vẫn INACTIVE, user phải nộp lại CCCD.
-    /// </summary>
+  
     [HttpPost("{kycId:int}/review")]
     [Authorize(Roles = "Admin")]
     public async Task<IActionResult> Review(int kycId, [FromBody] KycReviewRequest request)
@@ -131,10 +111,7 @@ public class KycController : ControllerBase
         }
     }
 
-    /// <summary>
-    /// Admin khoá (SUSPENDED) hoặc mở khoá (ACTIVE) tài khoản một user.
-    /// Dùng khi user vi phạm hoặc cần điều tra.
-    /// </summary>
+   
     [HttpPost("/api/admin/users/{userId}/suspend")]
     [Authorize(Roles = "Admin")]
     public async Task<IActionResult> SuspendAccount(string userId, [FromBody] SuspendAccountRequest request)
@@ -154,7 +131,7 @@ public class KycController : ControllerBase
         }
     }
 
-    // ──────────────────────────────────────────────────────────────────────────
+   
 
     private string? GetCurrentUserId()
         => User.FindFirstValue(ClaimTypes.NameIdentifier);

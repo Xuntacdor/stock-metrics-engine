@@ -33,7 +33,6 @@ public class PaymentService : IPaymentService
         _logger          = logger;
     }
 
-    // ─── Tạo link nạp tiền ────────────────────────────────────────────────────
 
     public async Task<CreateDepositResponse> CreateDepositLinkAsync(string userId, CreateDepositRequest request)
     {
@@ -43,10 +42,8 @@ public class PaymentService : IPaymentService
         if (string.IsNullOrWhiteSpace(request.ReturnUrl) || string.IsNullOrWhiteSpace(request.CancelUrl))
             throw new ArgumentException("Phải cung cấp ReturnUrl và CancelUrl.");
 
-        // OrderCode: số nguyên dương, unique, max 9,999,999,999,999
         var orderCode = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() % 9_999_999_999_999L;
 
-        // Tạo phiếu nạp trong DB với trạng thái PENDING trước khi gọi PayOS
         var deposit = new DepositRequest
         {
             UserId    = userId,
@@ -58,19 +55,17 @@ public class PaymentService : IPaymentService
         await _depositRepo.AddAsync(deposit);
         await _depositRepo.SaveChangesAsync();
 
-        // Tạo link thanh toán qua PayOS SDK v2
         var paymentLinkRequest = new CreatePaymentLinkRequest
         {
             OrderCode   = orderCode,
-            Amount      = (int)request.Amount,    // PayOS nhận int (VNĐ)
-            Description = "Nap tien QuantIQ",      // max 25 ký tự, không dấu
+            Amount      = (int)request.Amount,    
+            Description = "Nap tien QuantIQ",     
             ReturnUrl   = request.ReturnUrl,
             CancelUrl   = request.CancelUrl
         };
 
         var paymentLink = await _payOS.PaymentRequests.CreateAsync(paymentLinkRequest);
 
-        // Lưu checkout URL vào phiếu nạp
         deposit.CheckoutUrl = paymentLink.CheckoutUrl;
         await _depositRepo.UpdateAsync(deposit);
         await _depositRepo.SaveChangesAsync();
@@ -90,11 +85,9 @@ public class PaymentService : IPaymentService
         };
     }
 
-    // ─── Xử lý Webhook từ PayOS ────────────────────────────────────────────────
 
     public async Task HandleWebhookAsync(string rawBody, string payosSignature)
     {
-        // Deserialise toàn bộ webhook payload (kiểu Webhook của SDK)
         Webhook webhookPayload;
         try
         {
@@ -108,7 +101,6 @@ public class PaymentService : IPaymentService
             throw new UnauthorizedAccessException("Webhook payload không hợp lệ.");
         }
 
-        // Xác minh chữ ký → nhận lại WebhookData đã được verify
         WebhookData webhookData;
         try
         {
@@ -124,14 +116,12 @@ public class PaymentService : IPaymentService
             "PayOS webhook received: OrderCode={Code}, PayloadCode={PCode}",
             webhookData.OrderCode, webhookPayload.Code);
 
-        // Chỉ xử lý khi thanh toán thành công (code == "00")
         if (webhookPayload.Code != "00")
         {
             _logger.LogInformation("Webhook ignored (non-success code={Code})", webhookPayload.Code);
             return;
         }
 
-        // ─── Idempotency: Tra cứu OrderCode, không xử lý lần 2 ──────────────
         var deposit = await _depositRepo.GetByOrderCodeAsync(webhookData.OrderCode);
         if (deposit == null)
         {
@@ -144,10 +134,9 @@ public class PaymentService : IPaymentService
             _logger.LogWarning(
                 "Duplicate webhook for OrderCode={Code}, already PAID. Ignored.",
                 webhookData.OrderCode);
-            return;  // Không cộng tiền lần 2
+            return;  
         }
 
-        // ─── Cộng tiền vào ví — DB Transaction nguyên tử ─────────────────────
         await using var tx = await _context.Database.BeginTransactionAsync();
         try
         {
@@ -159,12 +148,10 @@ public class PaymentService : IPaymentService
             wallet.LastUpdated = DateTime.UtcNow;
             _walletRepo.Update(wallet);
 
-            // Đánh dấu phiếu nạp là PAID
             deposit.Status = "PAID";
             deposit.PaidAt = DateTime.UtcNow;
             await _depositRepo.UpdateAsync(deposit);
 
-            // Ghi lịch sử giao dịch (Audit Trail)
             var transaction = new Transaction
             {
                 UserId        = deposit.UserId,
@@ -193,7 +180,6 @@ public class PaymentService : IPaymentService
         }
     }
 
-    // ─── Huỷ lệnh nạp ─────────────────────────────────────────────────────────
 
     public async Task CancelDepositAsync(long orderCode)
     {
@@ -209,7 +195,6 @@ public class PaymentService : IPaymentService
         }
     }
 
-    // ─── Lịch sử nạp tiền ─────────────────────────────────────────────────────
 
     public async Task<IEnumerable<DepositDetailResponse>> GetDepositHistoryAsync(string userId)
     {

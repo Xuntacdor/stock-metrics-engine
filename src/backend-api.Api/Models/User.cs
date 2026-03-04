@@ -23,12 +23,6 @@ public partial class User
 
     public string KycStatus { get; set; } = "PENDING";
 
-    /// <summary>
-    /// Trạng thái tài khoản:
-    /// INACTIVE  - mới đăng ký, chưa hoàn thành KYC
-    /// ACTIVE    - đã được Admin duyệt KYC, được phép giao dịch
-    /// SUSPENDED - bị khóa bởi Admin
-    /// </summary>
     public string AccountStatus { get; set; } = "INACTIVE";
 
     public virtual ICollection<Order> Orders { get; set; } = new List<Order>();

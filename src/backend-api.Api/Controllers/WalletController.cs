@@ -32,7 +32,7 @@ public class WalletController : ControllerBase
     }
 
     [HttpPost("deposit")]
-    [RequireActiveAccount]  // Chỉ ACTIVE mới được nạp tiền
+    [RequireActiveAccount]  
     public async Task<IActionResult> Deposit([FromBody] DepositWithdrawRequest request)
     {
         try
@@ -45,7 +45,7 @@ public class WalletController : ControllerBase
     }
 
     [HttpPost("withdraw")]
-    [RequireActiveAccount]  // Chỉ ACTIVE mới được rút tiền
+    [RequireActiveAccount] 
     public async Task<IActionResult> Withdraw([FromBody] DepositWithdrawRequest request)
     {
         try
