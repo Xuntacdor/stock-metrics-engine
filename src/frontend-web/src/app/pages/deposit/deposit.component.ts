@@ -1,0 +1,233 @@
+import {
+    Component, signal,
+    ChangeDetectionStrategy,
+} from '@angular/core';
+import { CommonModule, DecimalPipe } from '@angular/common';
+import { CardComponent } from '../../shared/molecules/card/card.component';
+import { TabNavComponent, type TabItem } from '../../shared/molecules/tab-nav/tab-nav.component';
+import { FormFieldComponent } from '../../shared/molecules/form-field/form-field.component';
+import { StatBoxComponent, type StatBoxData } from '../../shared/molecules/stat-box/stat-box.component';
+import { BadgeComponent } from '../../shared/atoms/badge/badge.component';
+import { ButtonComponent } from '../../shared/atoms/button/button.component';
+import { InputComponent } from '../../shared/atoms/input/input.component';
+import { IconComponent } from '../../shared/atoms/icon/icon.component';
+
+type TransactionType = 'deposit' | 'withdraw';
+
+interface Transaction {
+    id: string; date: string; type: TransactionType;
+    amount: number; status: 'success' | 'pending' | 'failed';
+    method: string; ref: string;
+}
+
+@Component({
+    selector: 'app-deposit',
+    standalone: true,
+    imports: [CommonModule, DecimalPipe, CardComponent, TabNavComponent, FormFieldComponent, StatBoxComponent, BadgeComponent, ButtonComponent, InputComponent, IconComponent],
+    changeDetection: ChangeDetectionStrategy.OnPush,
+    template: `
+    <div class="p-4 md:p-6 space-y-6 animate-fade-in">
+      <div>
+        <h1 class="text-headline font-bold text-fg">Nạp / Rút tiền</h1>
+        <p class="text-small text-fg-muted mt-0.5">Quản lý tiền mặt và giao dịch ngân hàng</p>
+      </div>
+
+      <!-- Balance stats -->
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        @for (stat of balanceStats; track stat.title) {
+          <app-stat-box [data]="stat" />
+        }
+      </div>
+
+      <div class="grid grid-cols-1 xl:grid-cols-2 gap-6">
+
+        <!-- Deposit / Withdraw form -->
+        <app-card variant="elevated">
+          <!-- Mode switch -->
+          <div class="flex gap-3 mb-6">
+            <button [class]="modeClass('deposit')" (click)="mode.set('deposit')">
+              <app-icon name="arrow-down" size="sm" />
+              Nạp tiền
+            </button>
+            <button [class]="modeClass('withdraw')" (click)="mode.set('withdraw')">
+              <app-icon name="arrow-up" size="sm" />
+              Rút tiền
+            </button>
+          </div>
+
+          <div class="space-y-5">
+            <!-- Amount -->
+            <app-form-field label="Số tiền (VNĐ)" fieldId="dep-amount" [required]="true"
+              hintMessage="Nạp tối thiểu 100,000 đ · Tối đa 500,000,000 đ/ngày">
+              <app-input type="number" inputId="dep-amount" placeholder="10,000,000"
+                [(value)]="amount" />
+            </app-form-field>
+
+            <!-- Quick amounts -->
+            <div class="flex flex-wrap gap-2">
+              @for (q of quickAmounts; track q) {
+                <button
+                  class="px-3 py-1.5 text-xs rounded-lg border border-border bg-surface-2 text-fg-muted hover:border-up/50 hover:text-up transition-all"
+                  (click)="amount.set(q)"
+                >{{ q | number }} đ</button>
+              }
+            </div>
+
+            <!-- Bank / Method -->
+            @if (mode() === 'deposit') {
+              <div>
+                <p class="text-small font-medium text-fg mb-3">Phương thức nạp tiền</p>
+                <div class="grid grid-cols-2 gap-3">
+                  @for (bank of banks; track bank.id) {
+                    <button
+                      [class]="'flex items-center gap-2.5 p-3 rounded-xl border transition-all text-left ' +
+                        (selectedBank() === bank.id ? 'border-up bg-up/5' : 'border-border hover:border-border-hover')"
+                      (click)="selectedBank.set(bank.id)"
+                    >
+                      <div [class]="'w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold ' + bank.color">
+                        {{ bank.abbr }}
+                      </div>
+                      <div>
+                        <p class="text-xs font-semibold text-fg">{{ bank.name }}</p>
+                        <p class="text-xs text-fg-muted">{{ bank.fee }}</p>
+                      </div>
+                    </button>
+                  }
+                </div>
+              </div>
+            }
+
+            @if (mode() === 'withdraw') {
+              <app-form-field label="Số tài khoản ngân hàng" fieldId="bank-acc" [required]="true">
+                <app-input inputId="bank-acc" placeholder="0123 4567 8901 2345" [(value)]="bankAccount" />
+              </app-form-field>
+              <app-form-field label="Ngân hàng" fieldId="bank-name">
+                <app-input inputId="bank-name" placeholder="Vietcombank / BIDV / TPBank..." [(value)]="bankName" />
+              </app-form-field>
+
+              <div class="flex items-start gap-2 p-3 rounded-lg bg-reference/10 border border-reference/30">
+                <app-icon name="info" size="sm" class="text-reference shrink-0 mt-0.5" />
+                <p class="text-xs text-fg-muted">
+                  Yêu cầu rút tiền sẽ được xử lý trong <strong>1-2 ngày làm việc</strong>.
+                  Phí rút tiền: 0đ.
+                </p>
+              </div>
+            }
+
+            <app-btn
+              variant="primary" size="lg" [fullWidth]="true"
+              [label]="mode() === 'deposit' ? 'Nạp tiền ngay' : 'Gửi yêu cầu rút tiền'"
+              [loading]="isProcessing()"
+              (clicked)="process()"
+            />
+          </div>
+        </app-card>
+
+        <!-- Transaction history -->
+        <app-card title="Lịch sử giao dịch" variant="default" [hasHeaderAction]="true">
+          <ng-container slot="header-action">
+            <app-tab-nav [tabs]="historyTabs" [activeId]="historyTab()" variant="pills"
+              (activeIdChange)="historyTab.set($event)" />
+          </ng-container>
+
+          <div class="space-y-2 mt-4">
+            @for (tx of filteredHistory(); track tx.id) {
+              <div class="flex items-center gap-3 py-3 border-b border-border/50 last:border-0">
+                <!-- Icon -->
+                <div [class]="'w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ' +
+                  (tx.type === 'deposit' ? 'bg-up/10' : 'bg-down/10')">
+                  <app-icon [name]="tx.type === 'deposit' ? 'arrow-down' : 'arrow-up'" size="sm"
+                    [class]="tx.type === 'deposit' ? 'text-up' : 'text-down'" />
+                </div>
+                <!-- Info -->
+                <div class="flex-1 min-w-0">
+                  <p class="text-small font-medium text-fg">
+                    {{ tx.type === 'deposit' ? 'Nạp tiền' : 'Rút tiền' }} · {{ tx.method }}
+                  </p>
+                  <p class="text-xs text-fg-muted">{{ tx.date }} · {{ tx.ref }}</p>
+                </div>
+                <!-- Amount + status -->
+                <div class="text-right shrink-0">
+                  <p [class]="'text-small font-bold font-numeric ' + (tx.type === 'deposit' ? 'text-up' : 'text-down')">
+                    {{ tx.type === 'deposit' ? '+' : '-' }}{{ tx.amount | number }} đ
+                  </p>
+                  <app-badge [variant]="getTxBadgeVariant(tx.status)" size="sm">
+                    {{ getTxStatusLabel(tx.status) }}
+                  </app-badge>
+                </div>
+              </div>
+            }
+          </div>
+        </app-card>
+      </div>
+    </div>
+  `,
+})
+export class DepositComponent {
+    readonly mode = signal<TransactionType>('deposit');
+    readonly amount = signal<string | number>(0);
+    readonly bankAccount = signal<string | number>('');
+    readonly bankName = signal<string | number>('');
+    readonly selectedBank = signal('vcb');
+    readonly isProcessing = signal(false);
+    readonly historyTab = signal('all');
+
+    readonly quickAmounts = [500_000, 1_000_000, 5_000_000, 10_000_000, 50_000_000];
+
+    readonly historyTabs: TabItem[] = [
+        { id: 'all', label: 'Tất cả' },
+        { id: 'deposit', label: 'Nạp' },
+        { id: 'withdraw', label: 'Rút' },
+    ];
+
+    readonly balanceStats: StatBoxData[] = [
+        { title: 'Số dư khả dụng', value: 42_000_000, prefix: '₫', icon: 'wallet', trend: 'neutral', caption: 'Có thể giao dịch' },
+        { title: 'Đang rút', value: 5_000_000, prefix: '₫', icon: 'arrow-up', trend: 'down', caption: 'Đang xử lý' },
+        { title: 'Nạp tháng này', value: 20_000_000, prefix: '₫', icon: 'arrow-down', trend: 'up', caption: '3 giao dịch' },
+    ];
+
+    readonly banks = [
+        { id: 'vcb', name: 'Vietcombank', abbr: 'VCB', fee: 'Miễn phí', color: 'bg-green-900 text-green-300' },
+        { id: 'tcb', name: 'Techcombank', abbr: 'TCB', fee: 'Miễn phí', color: 'bg-red-900 text-red-300' },
+        { id: 'tpb', name: 'TPBank', abbr: 'TPB', fee: 'Miễn phí', color: 'bg-purple-900 text-purple-300' },
+        { id: 'bidv', name: 'BIDV', abbr: 'BID', fee: 'Miễn phí', color: 'bg-blue-900 text-blue-300' },
+    ];
+
+    private transactions: Transaction[] = [
+        { id: 'TX001', date: '06/03 09:14', type: 'deposit', amount: 10_000_000, status: 'success', method: 'Vietcombank', ref: 'QTIQ240306001' },
+        { id: 'TX002', date: '05/03 16:32', type: 'withdraw', amount: 5_000_000, status: 'pending', method: 'Techcombank', ref: 'QTIQ240305025' },
+        { id: 'TX003', date: '04/03 11:55', type: 'deposit', amount: 20_000_000, status: 'success', method: 'TPBank', ref: 'QTIQ240304008' },
+        { id: 'TX004', date: '01/03 08:20', type: 'deposit', amount: 2_000_000, status: 'failed', method: 'BIDV', ref: 'QTIQ240301003' },
+        { id: 'TX005', date: '28/02 15:10', type: 'withdraw', amount: 15_000_000, status: 'success', method: 'Vietcombank', ref: 'QTIQ240228017' },
+    ];
+
+    filteredHistory(): Transaction[] {
+        const tab = this.historyTab();
+        return tab === 'all' ? this.transactions : this.transactions.filter(t => t.type === tab);
+    }
+
+    modeClass(m: TransactionType): string {
+        const base = 'flex-1 flex items-center justify-center gap-2 h-11 rounded-xl font-medium text-small border transition-all ';
+        return base + (this.mode() === m
+            ? (m === 'deposit' ? 'bg-up text-white border-up shadow-md' : 'bg-down text-white border-down shadow-md')
+            : 'border-border text-fg-muted hover:bg-surface-2');
+    }
+
+    getTxBadgeVariant(status: Transaction['status']): 'up' | 'reference' | 'down' {
+        return { success: 'up' as const, pending: 'reference' as const, failed: 'down' as const }[status];
+    }
+
+    getTxStatusLabel(status: Transaction['status']): string {
+        return { success: 'Thành công', pending: 'Đang xử lý', failed: 'Thất bại' }[status];
+    }
+
+    process(): void {
+        const amt = Number(this.amount());
+        if (!amt || amt <= 0) return;
+        this.isProcessing.set(true);
+        setTimeout(() => {
+            this.isProcessing.set(false);
+            this.amount.set(0);
+        }, 1500);
+    }
+}
