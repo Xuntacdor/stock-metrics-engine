@@ -36,4 +36,6 @@ public partial class User
     public virtual ICollection<KycDocument> KycDocuments { get; set; } = new List<KycDocument>();
 
     public virtual ICollection<DepositRequest> DepositRequests { get; set; } = new List<DepositRequest>();
+
+    public virtual ICollection<RiskAlert> RiskAlerts { get; set; } = new List<RiskAlert>();
 }

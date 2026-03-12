@@ -15,6 +15,8 @@ public partial class CashWallet
 
     public decimal? AvailableBalance { get; set; }
 
+    public decimal? LoanAmount { get; set; }
+
     public DateTime? LastUpdated { get; set; }
 
     public byte[] RowVersion { get; set; } = null!;

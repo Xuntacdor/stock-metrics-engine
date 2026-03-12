@@ -28,6 +28,8 @@ public partial class QuantIQContext : DbContext
 
     public virtual DbSet<MarginRatio> MarginRatios { get; set; }
 
+    public virtual DbSet<RiskAlert> RiskAlerts { get; set; }
+
     public virtual DbSet<Order> Orders { get; set; }
 
     public virtual DbSet<Portfolio> Portfolios { get; set; }
@@ -111,6 +113,9 @@ public partial class QuantIQContext : DbContext
                 .HasDefaultValueSql("(getdate())")
                 .HasColumnType("datetime");
             entity.Property(e => e.LockedAmount)
+                .HasDefaultValue(0m)
+                .HasColumnType("decimal(18, 4)");
+            entity.Property(e => e.LoanAmount)
                 .HasDefaultValue(0m)
                 .HasColumnType("decimal(18, 4)");
             entity.Property(e => e.RowVersion)
@@ -385,6 +390,36 @@ public partial class QuantIQContext : DbContext
                 .HasForeignKey(d => d.UserId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK_DepositRequests_Users");
+        });
+
+        modelBuilder.Entity<RiskAlert>(entity =>
+        {
+            entity.HasKey(e => e.AlertId).HasName("PK__RiskAlerts");
+
+            entity.ToTable("RiskAlerts");
+
+            entity.HasIndex(e => e.UserId, "IX_RiskAlerts_UserID");
+            entity.HasIndex(e => e.CreatedAt, "IX_RiskAlerts_CreatedAt");
+
+            entity.Property(e => e.AlertId).HasColumnName("AlertID").ValueGeneratedOnAdd();
+            entity.Property(e => e.UserId)
+                .HasMaxLength(50)
+                .IsUnicode(false)
+                .HasColumnName("UserID");
+            entity.Property(e => e.AlertType)
+                .HasMaxLength(20)
+                .IsUnicode(false);
+            entity.Property(e => e.Rtt).HasColumnType("decimal(18, 4)");
+            entity.Property(e => e.Message).HasMaxLength(500);
+            entity.Property(e => e.CreatedAt)
+                .HasDefaultValueSql("(getutcdate())")
+                .HasColumnType("datetime");
+
+            entity.HasOne(d => d.User)
+                .WithMany(p => p.RiskAlerts)
+                .HasForeignKey(d => d.UserId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_RiskAlerts_Users");
         });
 
         OnModelCreatingPartial(modelBuilder);
