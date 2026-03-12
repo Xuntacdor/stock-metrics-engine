@@ -3,6 +3,7 @@ using backend_api.Api.Data;
 using backend_api.Api.Repositories;
 using backend_api.Api.Services;
 using backend_api.Api.Workers;
+using backend_api.Api.Hubs;
 using DotNetEnv;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
@@ -20,6 +21,7 @@ builder.Configuration.AddEnvironmentVariables();
 
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSignalR();
 
 builder.Services.AddSwaggerGen(c =>
 {
@@ -130,6 +132,23 @@ builder.Services.AddSingleton(new PayOSClient(payOsClientId, payOsApiKey, payOsC
 builder.Services.AddScoped<IDepositRepository, DepositRepository>();
 builder.Services.AddScoped<IPaymentService, PaymentService>();
 
+builder.Services.AddScoped<IMarginRatioRepository, MarginRatioRepository>();
+builder.Services.AddScoped<IRiskAlertRepository, RiskAlertRepository>();
+builder.Services.AddScoped<IMarginRiskService, MarginRiskService>();
+builder.Services.AddHostedService<RiskMonitorWorker>();
+
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowAllOrigins",
+        policy =>
+        {
+            policy.WithOrigins("http://localhost:4200")
+                  .AllowAnyHeader()
+                  .AllowAnyMethod()
+                  .AllowCredentials();
+        });
+});
+
 var app = builder.Build();
 
 try
@@ -151,9 +170,12 @@ if (app.Environment.IsDevelopment())
 app.UseHttpsRedirection();
 app.UseStaticFiles(); 
 
+app.UseCors("AllowAllOrigins");
+
 app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
+app.MapHub<MarketHub>("/hubs/market");
 
 app.Run();
