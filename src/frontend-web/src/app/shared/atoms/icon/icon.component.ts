@@ -1,7 +1,8 @@
 import {
-    Component, input, computed,
+    Component, input, computed, inject,
     ChangeDetectionStrategy,
 } from '@angular/core';
+import { DomSanitizer } from '@angular/platform-browser';
 
 export type IconSize = 'xs' | 'sm' | 'md' | 'lg' | 'xl';
 
@@ -21,6 +22,8 @@ export type IconSize = 'xs' | 'sm' | 'md' | 'lg' | 'xl';
   `,
 })
 export class IconComponent {
+    private readonly sanitizer = inject(DomSanitizer);
+
     readonly name = input<string>('');
     readonly size = input<IconSize>('md');
     readonly ariaLabel = input<string>('');
@@ -37,7 +40,8 @@ export class IconComponent {
     });
 
     readonly iconSvg = computed(() => {
-        return ICON_REGISTRY[this.name()] ?? ICON_REGISTRY['circle'];
+        const svgString = ICON_REGISTRY[this.name()] ?? ICON_REGISTRY['circle'];
+        return this.sanitizer.bypassSecurityTrustHtml(svgString);
     });
 }
 

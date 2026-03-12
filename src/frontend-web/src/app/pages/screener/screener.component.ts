@@ -13,6 +13,9 @@ import { IconComponent } from '../../shared/atoms/icon/icon.component';
 import { SkeletonComponent } from '../../shared/atoms/skeleton/skeleton.component';
 import { type StockRow } from '../../shared/organisms/price-table/price-table.component';
 import { getPriceColorClass, type PriceColor } from '../../core/tokens/colors';
+import { ScreenerService } from '../../core/services/screener.service';
+import { MarketDataService } from '../../core/services/market-data.service';
+import { inject, OnInit, OnDestroy } from '@angular/core';
 
 interface ScreenerFilter {
   priceMin: number; priceMax: number;
@@ -260,7 +263,10 @@ interface ScreenerResult extends StockRow {
     </div>
   `,
 })
-export class ScreenerComponent {
+export class ScreenerComponent implements OnInit {
+  private readonly screenerService = inject(ScreenerService);
+  private readonly marketData = inject(MarketDataService);
+
   readonly isSearching = signal(false);
   readonly activePreset = signal('');
   readonly selectedSectors = signal<string[]>([]);
@@ -289,35 +295,27 @@ export class ScreenerComponent {
     { id: 'small', label: 'Nhỏ (< 1,000 tỷ)' },
   ];
 
-  private allData: ScreenerResult[] = [
-    { symbol: 'VNM', name: 'Vinamilk', price: 65.8, refPrice: 65.0, ceilPrice: 69.55, floorPrice: 60.45, change: +0.8, changePct: +1.23, volume: 1_250_400, pe: 18.5, rsi: 52, marketCap: 137_000, sector: 'Tiêu dùng' },
-    { symbol: 'FPT', name: 'FPT Corp', price: 120.5, refPrice: 124.0, ceilPrice: 132.7, floorPrice: 115.3, change: -3.5, changePct: -2.82, volume: 3_870_100, pe: 22.1, rsi: 28, marketCap: 72_000, sector: 'Công nghệ' },
-    { symbol: 'VCB', name: 'Vietcombank', price: 78.3, refPrice: 79.5, ceilPrice: 85.07, floorPrice: 73.93, change: -1.2, changePct: -1.51, volume: 1_890_000, pe: 9.8, rsi: 45, marketCap: 285_000, sector: 'Ngân hàng' },
-    { symbol: 'HPG', name: 'Hòa Phát', price: 27.35, refPrice: 27.35, ceilPrice: 29.26, floorPrice: 25.44, change: 0.0, changePct: 0.00, volume: 8_420_000, pe: 11.2, rsi: 50, marketCap: 93_000, sector: 'Vật liệu' },
-    { symbol: 'VIC', name: 'Vingroup', price: 47.2, refPrice: 45.5, ceilPrice: 48.69, floorPrice: 42.31, change: +1.7, changePct: +3.74, volume: 2_100_000, pe: 31.0, rsi: 72, marketCap: 150_000, sector: 'Bất động sản' },
-    { symbol: 'MSN', name: 'Masan Group', price: 63.4, refPrice: 61.0, ceilPrice: 65.27, floorPrice: 56.73, change: +2.4, changePct: +3.93, volume: 980_000, pe: 15.3, rsi: 65, marketCap: 49_000, sector: 'Tiêu dùng' },
-    { symbol: 'GVR', name: 'Cao su VN', price: 15.25, refPrice: 16.1, ceilPrice: 17.23, floorPrice: 14.97, change: -0.85, changePct: -5.28, volume: 4_200_000, pe: 8.1, rsi: 22, marketCap: 28_000, sector: 'Vật liệu' },
-    { symbol: 'TCB', name: 'Techcombank', price: 24.5, refPrice: 24.0, ceilPrice: 25.68, floorPrice: 22.32, change: +0.5, changePct: +2.08, volume: 6_410_000, pe: 10.5, rsi: 58, marketCap: 87_000, sector: 'Ngân hàng' },
-  ];
-
-  constructor() { this.runSearch(); }
+  ngOnInit() {
+    if (this.marketData.stocks().length === 0) {
+      this.marketData.getSymbols().subscribe(() => this.runSearch());
+    } else {
+      this.runSearch();
+    }
+  }
 
   runSearch(): void {
+    if (this.isSearching()) return;
     this.isSearching.set(true);
-    setTimeout(() => {
-      const f = this.filters();
-      this.results.set(this.allData.filter(s =>
-        s.price >= f.priceMin && (f.priceMax === 0 || s.price <= f.priceMax) &&
-        s.pe >= f.peMin && (f.peMax === 0 || s.pe <= f.peMax) &&
-        s.rsi >= f.rsiMin && s.rsi <= f.rsiMax &&
-        (f.marketCap === 'all' ||
-          (f.marketCap === 'large' && s.marketCap >= 10_000) ||
-          (f.marketCap === 'mid' && s.marketCap >= 1_000 && s.marketCap < 10_000) ||
-          (f.marketCap === 'small' && s.marketCap < 1_000)) &&
-        (this.selectedSectors().length === 0 || this.selectedSectors().includes(s.sector))
-      ));
+
+    const filterQuery = {
+      ...this.filters(),
+      sector: this.selectedSectors()
+    };
+
+    this.screenerService.filterStocks(filterQuery).subscribe(results => {
+      this.results.set(results);
       this.isSearching.set(false);
-    }, 800);
+    });
   }
 
   applyPreset(preset: typeof this.presets[0]): void {

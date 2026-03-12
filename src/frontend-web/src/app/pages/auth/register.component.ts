@@ -1,5 +1,5 @@
 import {
-  Component, signal, computed,
+  Component, signal, computed, inject,
   ChangeDetectionStrategy,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
@@ -12,7 +12,7 @@ import { InputComponent } from '../../shared/atoms/input/input.component';
 import { LabelComponent } from '../../shared/atoms/label/label.component';
 import { IconComponent } from '../../shared/atoms/icon/icon.component';
 import { BadgeComponent } from '../../shared/atoms/badge/badge.component';
-
+import { AuthService } from '../../core/services/auth.service';
 @Component({
   selector: 'app-register',
   standalone: true,
@@ -219,6 +219,8 @@ import { BadgeComponent } from '../../shared/atoms/badge/badge.component';
   `,
 })
 export class RegisterComponent {
+  private readonly auth = inject(AuthService);
+
   readonly name = signal<string | number>('');
   readonly phone = signal<string | number>('');
   readonly email = signal<string | number>('');
@@ -297,7 +299,22 @@ export class RegisterComponent {
     this.nameSubmitted.set(true);
     if (!this.name() || this.emailError() || this.phoneError() || this.passError() || !this.agreed) return;
     this.isLoading.set(true);
-    setTimeout(() => { this.isLoading.set(false); this.currentStep.set(2); this.startCountdown(); }, 1000);
+
+    this.auth.register({
+      username: this.email() as string,
+      email: this.email() as string,
+      password: this.password() as string
+    }).subscribe({
+      next: () => {
+        this.isLoading.set(false);
+        this.currentStep.set(2);
+        this.startCountdown();
+      },
+      error: (err) => {
+        this.isLoading.set(false);
+        alert(err.message || 'Đăng ký thất bại.');
+      }
+    });
   }
 
   startCountdown(): void {

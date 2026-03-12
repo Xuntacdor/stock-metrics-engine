@@ -1,5 +1,5 @@
 import {
-  Component, signal, computed,
+  Component, signal, computed, inject,
   ChangeDetectionStrategy,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
@@ -12,7 +12,8 @@ import { InputComponent } from '../../shared/atoms/input/input.component';
 import { LabelComponent } from '../../shared/atoms/label/label.component';
 import { IconComponent } from '../../shared/atoms/icon/icon.component';
 import { BadgeComponent } from '../../shared/atoms/badge/badge.component';
-
+import { AuthService } from '../../core/services/auth.service';
+import { Router } from '@angular/router';
 @Component({
   selector: 'app-login',
   standalone: true,
@@ -145,6 +146,9 @@ import { BadgeComponent } from '../../shared/atoms/badge/badge.component';
   `,
 })
 export class LoginComponent {
+  private readonly auth = inject(AuthService);
+  private readonly router = inject(Router);
+
   readonly email = signal<string | number>('');
   readonly password = signal<string | number>('');
   readonly isLoading = signal(false);
@@ -170,8 +174,16 @@ export class LoginComponent {
 
     this.isLoading.set(true);
     this.generalError.set('');
-    setTimeout(() => {
-      this.isLoading.set(false);
-    }, 1500);
+
+    this.auth.login({ username: email, password: pass }).subscribe({
+      next: () => {
+        this.isLoading.set(false);
+        this.router.navigate(['/dashboard']);
+      },
+      error: (err) => {
+        this.isLoading.set(false);
+        this.generalError.set(err.message || 'Sai tài khoản hoặc mật khẩu.');
+      }
+    });
   }
 }

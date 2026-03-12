@@ -13,6 +13,9 @@ import { BadgeComponent } from '../../shared/atoms/badge/badge.component';
 import { ButtonComponent } from '../../shared/atoms/button/button.component';
 import { IconComponent } from '../../shared/atoms/icon/icon.component';
 import { SkeletonComponent } from '../../shared/atoms/skeleton/skeleton.component';
+import { MarketDataService } from '../../core/services/market-data.service';
+import { PortfolioService } from '../../core/services/portfolio.service';
+import { inject } from '@angular/core';
 
 @Component({
   selector: 'app-dashboard',
@@ -40,9 +43,23 @@ import { SkeletonComponent } from '../../shared/atoms/skeleton/skeleton.componen
 
       <!-- ── Market indices ── -->
       <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        @for (stat of marketStats; track stat.title) {
-          <app-stat-box [data]="stat" />
-        }
+        <!-- Replace hardcoded cards with signals -->
+        <!-- VN-Index -->
+        <app-stat-box [data]="{ 
+          title: 'VN-Index', value: marketData.market().vnIndex, change: 0, trend: 'up', icon: 'bar-chart-2', caption: '' 
+        }" />
+        <!-- HNX-Index -->
+        <app-stat-box [data]="{ 
+          title: 'HNX-Index', value: marketData.market().hnxIndex, change: 0, trend: 'up', icon: 'bar-chart-2', caption: '' 
+        }" />
+        <!-- UP Count -->
+        <app-stat-box [data]="{ 
+          title: 'Mã tăng', value: marketData.market().upCount, suffix: 'CP', trend: 'up', icon: 'arrow-up', caption: 'trong phiên' 
+        }" />
+        <!-- DOWN Count -->
+        <app-stat-box [data]="{ 
+          title: 'Mã giảm', value: marketData.market().downCount, suffix: 'CP', trend: 'down', icon: 'arrow-down', caption: 'trong phiên' 
+        }" />
       </div>
 
       <!-- ── Main content grid ── -->
@@ -89,15 +106,17 @@ import { SkeletonComponent } from '../../shared/atoms/skeleton/skeleton.componen
             <div class="space-y-3">
               <div class="flex items-center justify-between">
                 <span class="text-small text-fg-muted">Tổng tài sản</span>
-                <span class="text-body font-bold font-numeric text-fg">₫245,820,000</span>
+                <span class="text-body font-bold font-numeric text-fg">₫{{ portfolio.totalPortfolioValue() | number:'1.0-0' }}</span>
               </div>
               <div class="flex items-center justify-between">
-                <span class="text-small text-fg-muted">Lãi/Lỗ hôm nay</span>
-                <span class="text-body font-semibold font-numeric text-up">+₫1,234,500 (+0.50%)</span>
+                <span class="text-small text-fg-muted">Lãi/Lỗ tạm tính</span>
+                <span [class]="'text-body font-semibold font-numeric ' + (portfolio.totalUnrealizedPnL() >= 0 ? 'text-up' : 'text-down')">
+                  {{ portfolio.totalUnrealizedPnL() >= 0 ? '+' : '' }}₫{{ portfolio.totalUnrealizedPnL() | number:'1.0-0' }}
+                </span>
               </div>
               <div class="flex items-center justify-between">
                 <span class="text-small text-fg-muted">Tiền mặt</span>
-                <span class="text-body font-medium font-numeric text-fg">₫42,000,000</span>
+                <span class="text-body font-medium font-numeric text-fg">₫{{ portfolio.cashBalance() | number:'1.0-0' }}</span>
               </div>
               <hr class="border-border">
               <div class="grid grid-cols-2 gap-2">
@@ -159,15 +178,16 @@ import { SkeletonComponent } from '../../shared/atoms/skeleton/skeleton.componen
   `,
 })
 export class DashboardComponent implements OnInit {
+  public readonly marketData = inject(MarketDataService);
+  public readonly portfolio = inject(PortfolioService);
+
   readonly loadingTable = signal(true);
   readonly activeMarketTab = signal('hose');
   readonly activeMoverTab = signal('gainers');
 
   readonly marketTabs: TabItem[] = [
     { id: 'watchlist', label: 'Theo dõi', badge: 12 },
-    { id: 'hose', label: 'HOSE' },
-    { id: 'hnx', label: 'HNX' },
-    { id: 'upcom', label: 'UPCOM' },
+    { id: 'hose', label: 'Thị trường chung' }
   ];
 
   readonly moverTabs: TabItem[] = [
@@ -175,35 +195,18 @@ export class DashboardComponent implements OnInit {
     { id: 'losers', label: 'Giảm' },
   ];
 
-  readonly marketStats: StatBoxData[] = [
-    { title: 'VN-Index', value: 1274.52, change: +0.68, trend: 'up', icon: 'bar-chart-2', caption: '+8.67 điểm' },
-    { title: 'HNX-Index', value: 231.85, change: -0.31, trend: 'down', icon: 'bar-chart-2', caption: '-0.72 điểm' },
-    { title: 'Mã tăng', value: 187, suffix: 'CP', trend: 'up', icon: 'arrow-up', caption: 'trong phiên' },
-    { title: 'Mã giảm', value: 124, suffix: 'CP', trend: 'down', icon: 'arrow-down', caption: 'trong phiên' },
-  ];
-
-  private readonly allStocks: StockRow[] = [
-    { symbol: 'VNM', name: 'Vinamilk', price: 65.8, refPrice: 65.0, ceilPrice: 69.55, floorPrice: 60.45, change: +0.80, changePct: +1.23, volume: 1_250_400, value: 82.2 },
-    { symbol: 'FPT', name: 'FPT Corporation', price: 120.5, refPrice: 124.0, ceilPrice: 132.7, floorPrice: 115.3, change: -3.50, changePct: -2.82, volume: 3_870_100, value: 466.4 },
-    { symbol: 'HPG', name: 'Hòa Phát Group', price: 27.35, refPrice: 27.35, ceilPrice: 29.26, floorPrice: 25.44, change: 0.00, changePct: 0.00, volume: 8_420_000, value: 230.3 },
-    { symbol: 'VIC', name: 'Vingroup', price: 47.2, refPrice: 45.5, ceilPrice: 48.69, floorPrice: 42.31, change: +1.70, changePct: +3.74, volume: 2_100_000, value: 99.1 },
-    { symbol: 'VHM', name: 'Vinhomes', price: 38.1, refPrice: 38.8, ceilPrice: 41.52, floorPrice: 36.08, change: -0.70, changePct: -1.80, volume: 5_630_000, value: 214.5 },
-    { symbol: 'TCB', name: 'Techcombank', price: 24.5, refPrice: 24.0, ceilPrice: 25.68, floorPrice: 22.32, change: +0.50, changePct: +2.08, volume: 6_410_000, value: 157.1 },
-    { symbol: 'VCB', name: 'Vietcombank', price: 78.3, refPrice: 79.5, ceilPrice: 85.07, floorPrice: 73.93, change: -1.20, changePct: -1.51, volume: 1_890_000, value: 147.9 },
-    { symbol: 'MSN', name: 'Masan Group', price: 63.4, refPrice: 61.0, ceilPrice: 65.27, floorPrice: 56.73, change: +2.40, changePct: +3.93, volume: 980_000, value: 62.1 },
-    { symbol: 'GVR', name: 'Cao su Việt Nam', price: 15.25, refPrice: 16.1, ceilPrice: 17.23, floorPrice: 14.97, change: -0.85, changePct: -5.28, volume: 4_200_000, value: 64.1 },
-    { symbol: 'PLX', name: 'Petrolimex', price: 32.6, refPrice: 31.5, ceilPrice: 33.71, floorPrice: 29.29, change: +1.10, changePct: +3.49, volume: 1_560_000, value: 50.9 },
-  ];
-
-  readonly currentStocks = computed(() => this.allStocks);
+  readonly currentStocks = computed(() => {
+    return this.marketData.stocks();
+  });
 
   readonly topMovers = computed(() => {
-    const sorted = [...this.allStocks].sort((a, b) =>
+    const list = [...this.marketData.stocks()];
+    list.sort((a, b) =>
       this.activeMoverTab() === 'gainers'
         ? b.changePct - a.changePct
         : a.changePct - b.changePct
     );
-    return sorted.slice(0, 5);
+    return list.slice(0, 5);
   });
 
   readonly recentAlerts = [
@@ -213,12 +216,23 @@ export class DashboardComponent implements OnInit {
   ];
 
   ngOnInit(): void {
-    this.simulateLoad();
+    this.loadingTable.set(true);
+
+    this.marketData.getSymbols().subscribe({
+      next: () => this.loadingTable.set(false),
+      error: () => this.loadingTable.set(false)
+    });
+
+    this.portfolio.loadWallet().subscribe();
+    this.portfolio.loadPortfolio().subscribe();
   }
 
   simulateLoad(): void {
     this.loadingTable.set(true);
-    setTimeout(() => this.loadingTable.set(false), 1200);
+    this.marketData.getSymbols().subscribe({
+      next: () => this.loadingTable.set(false),
+      error: () => this.loadingTable.set(false)
+    });
   }
 
   onStockClick(stock: StockRow): void {

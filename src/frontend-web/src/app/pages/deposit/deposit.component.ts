@@ -1,6 +1,6 @@
 import {
-    Component, signal,
-    ChangeDetectionStrategy,
+  Component, signal,
+  ChangeDetectionStrategy,
 } from '@angular/core';
 import { CommonModule, DecimalPipe } from '@angular/common';
 import { CardComponent } from '../../shared/molecules/card/card.component';
@@ -11,21 +11,25 @@ import { BadgeComponent } from '../../shared/atoms/badge/badge.component';
 import { ButtonComponent } from '../../shared/atoms/button/button.component';
 import { InputComponent } from '../../shared/atoms/input/input.component';
 import { IconComponent } from '../../shared/atoms/icon/icon.component';
+import { WalletService } from '../../core/services/wallet.service';
+import { PaymentService } from '../../core/services/payment.service';
+import { TransactionService } from '../../core/services/transaction.service';
+import { inject, OnInit } from '@angular/core';
 
 type TransactionType = 'deposit' | 'withdraw';
 
 interface Transaction {
-    id: string; date: string; type: TransactionType;
-    amount: number; status: 'success' | 'pending' | 'failed';
-    method: string; ref: string;
+  id: string; date: string; type: TransactionType;
+  amount: number; status: 'success' | 'pending' | 'failed';
+  method: string; ref: string;
 }
 
 @Component({
-    selector: 'app-deposit',
-    standalone: true,
-    imports: [CommonModule, DecimalPipe, CardComponent, TabNavComponent, FormFieldComponent, StatBoxComponent, BadgeComponent, ButtonComponent, InputComponent, IconComponent],
-    changeDetection: ChangeDetectionStrategy.OnPush,
-    template: `
+  selector: 'app-deposit',
+  standalone: true,
+  imports: [CommonModule, DecimalPipe, CardComponent, TabNavComponent, FormFieldComponent, StatBoxComponent, BadgeComponent, ButtonComponent, InputComponent, IconComponent],
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  template: `
     <div class="p-4 md:p-6 space-y-6 animate-fade-in">
       <div>
         <h1 class="text-headline font-bold text-fg">Nạp / Rút tiền</h1>
@@ -34,9 +38,9 @@ interface Transaction {
 
       <!-- Balance stats -->
       <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        @for (stat of balanceStats; track stat.title) {
-          <app-stat-box [data]="stat" />
-        }
+        <app-stat-box [data]="{ title: 'Số dư thực tế', value: walletBalance(), prefix: '₫', icon: 'wallet', trend: 'neutral', caption: 'Tổng tiền trong ví' }" />
+        <app-stat-box [data]="{ title: 'Khả dụng', value: walletAvailable(), prefix: '₫', icon: 'check-circle', trend: 'up', caption: 'Có thể giao dịch/rút' }" />
+        <app-stat-box [data]="{ title: 'Đang phong tỏa', value: walletLocked(), prefix: '₫', icon: 'lock', trend: 'down', caption: 'Chờ khớp lệnh/rút' }" />
       </div>
 
       <div class="grid grid-cols-1 xl:grid-cols-2 gap-6">
@@ -163,71 +167,135 @@ interface Transaction {
     </div>
   `,
 })
-export class DepositComponent {
-    readonly mode = signal<TransactionType>('deposit');
-    readonly amount = signal<string | number>(0);
-    readonly bankAccount = signal<string | number>('');
-    readonly bankName = signal<string | number>('');
-    readonly selectedBank = signal('vcb');
-    readonly isProcessing = signal(false);
-    readonly historyTab = signal('all');
+export class DepositComponent implements OnInit {
+  private readonly walletService = inject(WalletService);
+  private readonly paymentService = inject(PaymentService);
+  private readonly transactionService = inject(TransactionService);
 
-    readonly quickAmounts = [500_000, 1_000_000, 5_000_000, 10_000_000, 50_000_000];
+  readonly mode = signal<TransactionType>('deposit');
+  readonly amount = signal<string | number>('');
+  readonly bankAccount = signal<string | number>('');
+  readonly bankName = signal<string | number>('');
+  readonly selectedBank = signal('vcb');
+  readonly isProcessing = signal(false);
+  readonly historyTab = signal('all');
 
-    readonly historyTabs: TabItem[] = [
-        { id: 'all', label: 'Tất cả' },
-        { id: 'deposit', label: 'Nạp' },
-        { id: 'withdraw', label: 'Rút' },
-    ];
+  readonly walletBalance = signal<number>(0);
+  readonly walletAvailable = signal<number>(0);
+  readonly walletLocked = signal<number>(0);
 
-    readonly balanceStats: StatBoxData[] = [
-        { title: 'Số dư khả dụng', value: 42_000_000, prefix: '₫', icon: 'wallet', trend: 'neutral', caption: 'Có thể giao dịch' },
-        { title: 'Đang rút', value: 5_000_000, prefix: '₫', icon: 'arrow-up', trend: 'down', caption: 'Đang xử lý' },
-        { title: 'Nạp tháng này', value: 20_000_000, prefix: '₫', icon: 'arrow-down', trend: 'up', caption: '3 giao dịch' },
-    ];
+  readonly realTransactions = signal<Transaction[]>([]);
 
-    readonly banks = [
-        { id: 'vcb', name: 'Vietcombank', abbr: 'VCB', fee: 'Miễn phí', color: 'bg-green-900 text-green-300' },
-        { id: 'tcb', name: 'Techcombank', abbr: 'TCB', fee: 'Miễn phí', color: 'bg-red-900 text-red-300' },
-        { id: 'tpb', name: 'TPBank', abbr: 'TPB', fee: 'Miễn phí', color: 'bg-purple-900 text-purple-300' },
-        { id: 'bidv', name: 'BIDV', abbr: 'BID', fee: 'Miễn phí', color: 'bg-blue-900 text-blue-300' },
-    ];
+  readonly quickAmounts = [500_000, 1_000_000, 5_000_000, 10_000_000, 50_000_000];
 
-    private transactions: Transaction[] = [
-        { id: 'TX001', date: '06/03 09:14', type: 'deposit', amount: 10_000_000, status: 'success', method: 'Vietcombank', ref: 'QTIQ240306001' },
-        { id: 'TX002', date: '05/03 16:32', type: 'withdraw', amount: 5_000_000, status: 'pending', method: 'Techcombank', ref: 'QTIQ240305025' },
-        { id: 'TX003', date: '04/03 11:55', type: 'deposit', amount: 20_000_000, status: 'success', method: 'TPBank', ref: 'QTIQ240304008' },
-        { id: 'TX004', date: '01/03 08:20', type: 'deposit', amount: 2_000_000, status: 'failed', method: 'BIDV', ref: 'QTIQ240301003' },
-        { id: 'TX005', date: '28/02 15:10', type: 'withdraw', amount: 15_000_000, status: 'success', method: 'Vietcombank', ref: 'QTIQ240228017' },
-    ];
+  readonly historyTabs: TabItem[] = [
+    { id: 'all', label: 'Tất cả' },
+    { id: 'deposit', label: 'Nạp' },
+    { id: 'withdraw', label: 'Rút' },
+  ];
 
-    filteredHistory(): Transaction[] {
-        const tab = this.historyTab();
-        return tab === 'all' ? this.transactions : this.transactions.filter(t => t.type === tab);
+  readonly balanceStats: StatBoxData[] = [
+    { title: 'Số dư khả dụng', value: 42_000_000, prefix: '₫', icon: 'wallet', trend: 'neutral', caption: 'Có thể giao dịch' },
+    { title: 'Đang rút', value: 5_000_000, prefix: '₫', icon: 'arrow-up', trend: 'down', caption: 'Đang xử lý' },
+    { title: 'Nạp tháng này', value: 20_000_000, prefix: '₫', icon: 'arrow-down', trend: 'up', caption: '3 giao dịch' },
+  ];
+
+  readonly banks = [
+    { id: 'vcb', name: 'Vietcombank', abbr: 'VCB', fee: 'Miễn phí', color: 'bg-green-900 text-green-300' },
+    { id: 'tcb', name: 'Techcombank', abbr: 'TCB', fee: 'Miễn phí', color: 'bg-red-900 text-red-300' },
+    { id: 'tpb', name: 'TPBank', abbr: 'TPB', fee: 'Miễn phí', color: 'bg-purple-900 text-purple-300' },
+    { id: 'bidv', name: 'BIDV', abbr: 'BID', fee: 'Miễn phí', color: 'bg-blue-900 text-blue-300' },
+  ];
+
+  ngOnInit(): void {
+    this.loadData();
+  }
+
+  loadData(): void {
+    this.walletService.getWallet().subscribe(res => {
+      this.walletBalance.set(res.balance);
+      this.walletAvailable.set(res.availableBalance);
+      this.walletLocked.set(res.lockedAmount);
+    });
+
+    this.transactionService.getMyTransactions().subscribe(txs => {
+      const mapped: Transaction[] = txs
+        .filter(t => t.transType === 'DEPOSIT' || t.transType === 'WITHDRAW')
+        .map(t => ({
+          id: t.transId.toString(),
+          date: new Date(t.transTime || Date.now()).toLocaleString('vi-VN'),
+          type: t.transType === 'DEPOSIT' ? 'deposit' : 'withdraw',
+          amount: t.amount,
+          status: 'success',
+          method: 'Bank Transfer',
+          ref: t.refId
+        }));
+
+      mapped.reverse();
+      this.realTransactions.set(mapped);
+    });
+  }
+
+  filteredHistory(): Transaction[] {
+    const tab = this.historyTab();
+    const txs = this.realTransactions();
+    return tab === 'all' ? txs : txs.filter(t => t.type === tab);
+  }
+
+  modeClass(m: TransactionType): string {
+    const base = 'flex-1 flex items-center justify-center gap-2 h-11 rounded-xl font-medium text-small border transition-all ';
+    return base + (this.mode() === m
+      ? (m === 'deposit' ? 'bg-up text-white border-up shadow-md' : 'bg-down text-white border-down shadow-md')
+      : 'border-border text-fg-muted hover:bg-surface-2');
+  }
+
+  getTxBadgeVariant(status: Transaction['status']): 'up' | 'reference' | 'down' {
+    return { success: 'up' as const, pending: 'reference' as const, failed: 'down' as const }[status];
+  }
+
+  getTxStatusLabel(status: Transaction['status']): string {
+    return { success: 'Thành công', pending: 'Đang xử lý', failed: 'Thất bại' }[status];
+  }
+
+  process(): void {
+    const amt = Number(this.amount());
+    if (!amt || amt <= 0) return;
+    this.isProcessing.set(true);
+
+    if (this.mode() === 'deposit') {
+      this.paymentService.createDeposit({
+        amount: amt,
+        returnUrl: window.location.origin + '/deposit',
+        cancelUrl: window.location.origin + '/deposit'
+      }).subscribe({
+        next: (res) => {
+          this.isProcessing.set(false);
+          this.amount.set('');
+          if (res.checkoutUrl) {
+            window.location.href = res.checkoutUrl;
+          } else {
+            alert('Nạp tiền thành công');
+            this.loadData();
+          }
+        },
+        error: (err) => {
+          this.isProcessing.set(false);
+          alert('Lỗi nạp tiền: ' + (err?.error?.message || err.message));
+        }
+      });
+    } else {
+      this.walletService.withdraw(amt).subscribe({
+        next: () => {
+          this.isProcessing.set(false);
+          this.amount.set('');
+          alert('Rút tiền thành công!');
+          this.loadData();
+        },
+        error: (err) => {
+          this.isProcessing.set(false);
+          alert('Lỗi rút tiền: ' + (err?.error?.message || err.message));
+        }
+      });
     }
-
-    modeClass(m: TransactionType): string {
-        const base = 'flex-1 flex items-center justify-center gap-2 h-11 rounded-xl font-medium text-small border transition-all ';
-        return base + (this.mode() === m
-            ? (m === 'deposit' ? 'bg-up text-white border-up shadow-md' : 'bg-down text-white border-down shadow-md')
-            : 'border-border text-fg-muted hover:bg-surface-2');
-    }
-
-    getTxBadgeVariant(status: Transaction['status']): 'up' | 'reference' | 'down' {
-        return { success: 'up' as const, pending: 'reference' as const, failed: 'down' as const }[status];
-    }
-
-    getTxStatusLabel(status: Transaction['status']): string {
-        return { success: 'Thành công', pending: 'Đang xử lý', failed: 'Thất bại' }[status];
-    }
-
-    process(): void {
-        const amt = Number(this.amount());
-        if (!amt || amt <= 0) return;
-        this.isProcessing.set(true);
-        setTimeout(() => {
-            this.isProcessing.set(false);
-            this.amount.set(0);
-        }, 1500);
-    }
+  }
 }

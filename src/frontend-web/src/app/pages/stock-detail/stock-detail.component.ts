@@ -6,6 +6,9 @@ import { PriceDisplayComponent, type PriceData } from '../../shared/molecules/pr
 import { BadgeComponent } from '../../shared/atoms/badge/badge.component';
 import { ButtonComponent } from '../../shared/atoms/button/button.component';
 import { IconComponent } from '../../shared/atoms/icon/icon.component';
+import { ChartService } from '../../core/services/chart.service';
+import { MarketDataService } from '../../core/services/market-data.service';
+import { inject, OnInit } from '@angular/core';
 
 @Component({
   selector: 'app-stock-detail',
@@ -20,9 +23,20 @@ import { IconComponent } from '../../shared/atoms/icon/icon.component';
           <div class="flex items-center gap-3 mb-2">
             <h1 class="text-headline font-bold text-fg">{{ symbol() }}</h1>
             <app-badge variant="info" size="sm">HOSE</app-badge>
-            <app-badge variant="neutral" size="sm">Tiêu dùng</app-badge>
+            <app-badge variant="neutral" size="sm">{{ stockResult()?.name || symbol() }}</app-badge>
           </div>
-          <app-price-display [data]="priceData" layout="full" [showVolume]="true" />
+          @if (stockResult()) {
+            <app-price-display [data]="{
+              symbol: stockResult()!.symbol,
+              price: stockResult()!.price,
+              refPrice: stockResult()!.refPrice,
+              ceilPrice: stockResult()!.ceilPrice,
+              floorPrice: stockResult()!.floorPrice,
+              change: stockResult()!.change,
+              changePct: stockResult()!.changePct,
+              volume: stockResult()!.volume
+            }" layout="full" [showVolume]="true" />
+          }
         </div>
         <div class="flex gap-2">
           <app-btn variant="primary" size="md" label="Đặt lệnh MUA" />
@@ -37,18 +51,20 @@ import { IconComponent } from '../../shared/atoms/icon/icon.component';
       <div class="grid grid-cols-1 xl:grid-cols-3 gap-6">
         <!-- Chart (2/3) -->
         <div class="xl:col-span-2 h-[480px]">
-          <app-candle-chart
-            [symbol]="symbol()"
-            [candles]="candles"
-            [loading]="false"
-            [showIndicators]="true"
-            [lastPrice]="65.8"
-            [lastChangePct]="1.23"
-            [rsi]="28.5"
-            [macd]="0.42"
-            [ma20]="64.5"
-            [ma50]="62.8"
-          />
+          @if (stockResult()) {
+            <app-candle-chart
+              [symbol]="symbol()"
+              [candles]="chartCandles()"
+              [loading]="loadingChart()"
+              [showIndicators]="true"
+              [lastPrice]="stockResult()!.price"
+              [lastChangePct]="stockResult()!.changePct"
+              [rsi]="28.5"
+              [macd]="0.42"
+              [ma20]="stockResult()!.price * 0.98"
+              [ma50]="stockResult()!.price * 0.96"
+            />
+          }
         </div>
 
         <!-- Sidebar (1/3) -->
@@ -77,7 +93,7 @@ import { IconComponent } from '../../shared/atoms/icon/icon.component';
           <!-- Key stats -->
           <app-card title="Thông tin giao dịch" variant="default">
             <div class="space-y-2 text-small">
-              @for (stat of keyStats; track stat.label) {
+              @for (stat of keyStats(); track stat.label) {
                 <div class="flex items-center justify-between py-1 border-b border-border/50 last:border-0">
                   <span class="text-fg-muted">{{ stat.label }}</span>
                   <span class="font-numeric font-medium" [class]="stat.color || 'text-fg'">{{ stat.value }}</span>
@@ -90,25 +106,17 @@ import { IconComponent } from '../../shared/atoms/icon/icon.component';
     </div>
   `,
 })
-export class StockDetailComponent {
+export class StockDetailComponent implements OnInit {
+  public chartService = inject(ChartService);
+  public marketData = inject(MarketDataService);
+
   readonly symbol = input('VNM');
 
-  readonly priceData: PriceData = {
-    symbol: 'VNM', price: 65.8, refPrice: 65.0,
-    ceilPrice: 69.55, floorPrice: 60.45,
-    change: +0.80, changePct: +1.23, volume: 1_250_400,
-  };
+  readonly loadingChart = signal(true);
+  readonly chartCandles = signal<any[]>([]);
 
-  readonly candles: CandlePoint[] = Array.from({ length: 30 }, (_, i) => {
-    const base = 63 + Math.random() * 5;
-    return {
-      time: Math.floor(Date.now() / 1000) - (30 - i) * 86400,
-      open: base,
-      high: base + Math.random() * 2,
-      low: base - Math.random() * 2,
-      close: base + (Math.random() - 0.5) * 3,
-      volume: Math.floor(500_000 + Math.random() * 2_000_000),
-    };
+  readonly stockResult = computed(() => {
+    return this.marketData.stocks().find(s => s.symbol === this.symbol());
   });
 
   readonly orderBook = [
@@ -119,14 +127,38 @@ export class StockDetailComponent {
   readonly totalBid = 155_700;
   readonly totalAsk = 198_400;
 
-  readonly keyStats = [
-    { label: 'Mở cửa', value: '65.1', color: '' },
-    { label: 'Cao nhất', value: '66.2', color: 'text-up' },
-    { label: 'Thấp nhất', value: '64.8', color: 'text-down' },
-    { label: 'P/E', value: '18.5x', color: '' },
-    { label: 'EPS', value: '3,562 đ', color: '' },
-    { label: 'KLCP', value: '2.089 tỷ CP', color: '' },
-    { label: 'Vốn hóa', value: '137,463 tỷ đ', color: '' },
-    { label: 'Room NN', value: '7.28%', color: 'text-reference' },
-  ];
+  readonly keyStats = computed(() => {
+    const s = this.stockResult();
+    if (!s) return [];
+    return [
+      { label: 'Mở cửa', value: s.refPrice.toFixed(2), color: '' },
+      { label: 'Cao nhất', value: s.ceilPrice.toFixed(2), color: 'text-up' },
+      { label: 'Thấp nhất', value: s.floorPrice.toFixed(2), color: 'text-down' },
+      { label: 'P/E', value: '18.5x', color: '' },
+      { label: 'EPS', value: '3,562 đ', color: '' },
+      { label: 'KLCP', value: (s.volume / 1000000).toFixed(2) + ' triệu CP', color: '' },
+      { label: 'Vốn hóa', value: '137,463 tỷ đ', color: '' },
+      { label: 'Room NN', value: '7.28%', color: 'text-reference' },
+    ];
+  });
+
+  ngOnInit(): void {
+    if (this.marketData.stocks().length === 0) {
+      this.marketData.getSymbols().subscribe();
+    }
+
+    this.chartService.getCandles(this.symbol()).subscribe(data => {
+      const formatted = data.map(c => ({
+        time: new Date(c.time).getTime() / 1000,
+        open: c.open,
+        high: c.high,
+        low: c.low,
+        close: c.close,
+        volume: c.volume
+      }));
+      formatted.sort((a, b) => a.time - b.time);
+      this.chartCandles.set(formatted);
+      this.loadingChart.set(false);
+    });
+  }
 }
