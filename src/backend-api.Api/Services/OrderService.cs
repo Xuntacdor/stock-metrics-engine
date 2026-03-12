@@ -13,6 +13,7 @@ public class OrderService : IOrderService
     private readonly IWalletRepository _walletRepo;
     private readonly ITransactionRepository _transactionRepo;
     private readonly ISymbolRepository _symbolRepo;
+    private readonly IMarginRiskService _riskService;
     private readonly QuantIQContext _context;
 
     public OrderService(
@@ -21,6 +22,7 @@ public class OrderService : IOrderService
         IWalletRepository walletRepo,
         ITransactionRepository transactionRepo,
         ISymbolRepository symbolRepo,
+        IMarginRiskService riskService,
         QuantIQContext context)
     {
         _orderRepo = orderRepo;
@@ -28,6 +30,7 @@ public class OrderService : IOrderService
         _walletRepo = walletRepo;
         _transactionRepo = transactionRepo;
         _symbolRepo = symbolRepo;
+        _riskService = riskService;
         _context = context;
     }
 
@@ -138,12 +141,19 @@ public class OrderService : IOrderService
 
     private async Task HandleBuyPreCheck(CashWallet wallet, Order order)
     {
-        var totalCost = order.Price * order.RequestQty;
-        if (wallet.AvailableBalance < totalCost)
-            throw new InvalidOperationException(
-                $"Insufficient balance. Need: {totalCost:N0} VNĐ, Available: {wallet.AvailableBalance:N0} VNĐ.");
+        var isAllowed = await _riskService.ValidatePreTradeAsync(
+            order.UserId, order.Symbol, order.RequestQty, order.Price);
 
-        wallet.LockedAmount += totalCost;
+        if (!isAllowed)
+        {
+            var buyingPower = await _riskService.GetBuyingPowerAsync(order.UserId);
+            var totalCost = order.Price * order.RequestQty;
+            throw new InvalidOperationException(
+                $"Pre-trade risk check failed. Need: {totalCost:N0} VNĐ, Buying Power: {buyingPower:N0} VNĐ.");
+        }
+
+        var cost = order.Price * order.RequestQty;
+        wallet.LockedAmount += cost;
         wallet.LastUpdated = DateTime.UtcNow;
         _walletRepo.Update(wallet);
         await _walletRepo.SaveChangesAsync();
@@ -158,7 +168,6 @@ public class OrderService : IOrderService
             throw new InvalidOperationException(
                 $"Insufficient quantity. Need: {order.RequestQty}, Available: {portfolio.AvailableQuantity}.");
 
-        // Lock the shares
         portfolio.LockedQuantity += order.RequestQty;
         _portfolioRepo.Update(portfolio);
         await _portfolioRepo.SaveChangesAsync();
