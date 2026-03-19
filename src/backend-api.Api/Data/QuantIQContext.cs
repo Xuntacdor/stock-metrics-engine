@@ -40,6 +40,11 @@ public partial class QuantIQContext : DbContext
 
     public virtual DbSet<User> Users { get; set; }
 
+    public virtual DbSet<NewsArticle> NewsArticles { get; set; }
+
+    public virtual DbSet<StockComment> StockComments { get; set; }
+
+    public virtual DbSet<AuditLog> AuditLogs { get; set; }
 
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -420,6 +425,60 @@ public partial class QuantIQContext : DbContext
                 .HasForeignKey(d => d.UserId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK_RiskAlerts_Users");
+        });
+
+        modelBuilder.Entity<NewsArticle>(entity =>
+        {
+            entity.HasKey(e => e.ArticleId);
+            entity.ToTable("NewsArticles");
+            entity.HasIndex(e => e.Url).IsUnique();
+            entity.HasIndex(e => new { e.Symbol, e.PublishedAt }).HasDatabaseName("IX_NewsArticles_Symbol_Date");
+
+            entity.Property(e => e.Symbol).HasMaxLength(20).IsUnicode(false);
+            entity.Property(e => e.Title).HasMaxLength(500).IsRequired();
+            entity.Property(e => e.Url).HasMaxLength(1000).IsUnicode(false).IsRequired();
+            entity.Property(e => e.Source).HasMaxLength(50).IsUnicode(false);
+            entity.Property(e => e.Summary).HasMaxLength(2000);
+            entity.Property(e => e.Sentiment).HasMaxLength(20).IsUnicode(false);
+            entity.Property(e => e.SentimentScore).HasColumnType("float");
+            entity.Property(e => e.CreatedAt)
+                .HasDefaultValueSql("(getutcdate())")
+                .HasColumnType("datetime2");
+            entity.Property(e => e.PublishedAt).HasColumnType("datetime2");
+        });
+
+        modelBuilder.Entity<StockComment>(entity =>
+        {
+            entity.HasKey(e => e.CommentId);
+            entity.ToTable("StockComments");
+            entity.HasIndex(e => e.Symbol).HasDatabaseName("IX_StockComments_Symbol");
+
+            entity.Property(e => e.Symbol).HasMaxLength(20).IsUnicode(false).IsRequired();
+            entity.Property(e => e.UserId).HasMaxLength(50).IsUnicode(false).IsRequired();
+            entity.Property(e => e.Content).HasMaxLength(2000).IsRequired();
+            entity.Property(e => e.CreatedAt)
+                .HasDefaultValueSql("(getutcdate())")
+                .HasColumnType("datetime2");
+
+            entity.HasOne(d => d.User)
+                .WithMany()
+                .HasForeignKey(d => d.UserId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_StockComments_Users");
+        });
+
+        modelBuilder.Entity<AuditLog>(entity =>
+        {
+            entity.HasKey(e => e.AuditLogId);
+            entity.ToTable("AuditLogs");
+            entity.HasIndex(e => e.UserId).HasDatabaseName("IX_AuditLogs_UserID");
+            entity.HasIndex(e => e.CreatedAt).HasDatabaseName("IX_AuditLogs_CreatedAt");
+            entity.Property(e => e.UserId).HasMaxLength(50).IsUnicode(false);
+            entity.Property(e => e.Action).HasMaxLength(100).IsUnicode(false);
+            entity.Property(e => e.IpAddress).HasMaxLength(50).IsUnicode(false);
+            entity.Property(e => e.CreatedAt)
+                .HasDefaultValueSql("(getutcdate())")
+                .HasColumnType("datetime");
         });
 
         OnModelCreatingPartial(modelBuilder);
