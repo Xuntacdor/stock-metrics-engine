@@ -67,10 +67,28 @@ export const routes: Routes = [
                 title: 'Nạp/Rút tiền – QuantIQ',
             },
             {
+                path: 'risk',
+                loadComponent: () =>
+                    import('./pages/risk/risk.component').then(m => m.RiskComponent),
+                title: 'Quản trị rủi ro – QuantIQ',
+            },
+            {
                 path: 'settings',
                 loadComponent: () =>
                     import('./pages/settings/settings.component').then(m => m.SettingsComponent),
                 title: 'Cài đặt – QuantIQ',
+            },
+            {
+                path: 'news',
+                loadComponent: () =>
+                    import('./pages/news/news.component').then(m => m.NewsComponent),
+                title: 'Tin tức – QuantIQ',
+            },
+            {
+                path: 'leaderboard',
+                loadComponent: () =>
+                    import('./pages/leaderboard/leaderboard.component').then(m => m.LeaderboardComponent),
+                title: 'Bảng xếp hạng – QuantIQ',
             },
         ],
     },

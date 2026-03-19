@@ -1,9 +1,9 @@
 import {
   Component, signal, computed,
-  ChangeDetectionStrategy, OnInit,
+  ChangeDetectionStrategy, OnInit, inject
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { RouterLink } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { PriceTableComponent, type StockRow } from '../../shared/organisms/price-table/price-table.component';
 import { PortfolioSummaryComponent, type Holding } from '../../shared/organisms/portfolio-summary/portfolio-summary.component';
 import { StatBoxComponent, type StatBoxData } from '../../shared/molecules/stat-box/stat-box.component';
@@ -15,7 +15,7 @@ import { IconComponent } from '../../shared/atoms/icon/icon.component';
 import { SkeletonComponent } from '../../shared/atoms/skeleton/skeleton.component';
 import { MarketDataService } from '../../core/services/market-data.service';
 import { PortfolioService } from '../../core/services/portfolio.service';
-import { inject } from '@angular/core';
+import { RiskService } from '../../core/services/risk.service';
 
 @Component({
   selector: 'app-dashboard',
@@ -34,7 +34,7 @@ import { inject } from '@angular/core';
       <div class="flex items-center justify-between">
         <div>
           <h1 class="text-headline font-bold text-fg">Tổng quan thị trường</h1>
-          <p class="text-small text-fg-muted mt-0.5">Thứ 5, 06/03/2026 · Phiên HOSE đang mở</p>
+          <p class="text-small text-fg-muted mt-0.5">{{ todayLabel() }} · Sàn HOSE</p>
         </div>
         <app-btn variant="primary" size="sm" label="Đặt lệnh nhanh">
           <app-icon slot="icon-left" name="trending-up" size="sm" />
@@ -155,6 +155,51 @@ import { inject } from '@angular/core';
             </div>
           </app-card>
 
+          <!-- Risk quick-card -->
+          <app-card title="⚡ Rủi ro tài khoản" variant="default" [hasHeaderAction]="true">
+            <ng-container slot="header-action">
+              <a routerLink="/risk" class="text-xs text-up hover:underline">Chi tiết</a>
+            </ng-container>
+            <div class="space-y-2.5">
+              <!-- Buying Power -->
+              <div class="flex items-center justify-between">
+                <span class="text-small text-fg-muted">💰 Sức mua</span>
+                @if (riskSvc.buyingPower(); as bp) {
+                  <span class="text-small font-semibold font-numeric text-fg">
+                    {{ bp.buyingPower | number:'1.0-0' }} ₫
+                  </span>
+                } @else {
+                  <span class="text-xs text-fg-muted">—</span>
+                }
+              </div>
+              <!-- Rtt -->
+              <div class="flex items-center justify-between">
+                <span class="text-small text-fg-muted">📊 Tỷ lệ TK (Rtt)</span>
+                @if (riskSvc.rtt(); as rtt) {
+                  @if (rtt.loanAmount === 0) {
+                    <span class="text-xs font-semibold" style="color:#22c55e">Không có nợ</span>
+                  } @else {
+                    <span class="text-small font-semibold font-numeric"
+                      [style.color]="rtt.rtt < 0.80 ? '#ef4444' : rtt.rtt < 0.85 ? '#f59e0b' : '#22c55e'">
+                      {{ rtt.rtt | percent:'1.1-1' }}
+                    </span>
+                  }
+                } @else {
+                  <span class="text-xs text-fg-muted">—</span>
+                }
+              </div>
+              <!-- Warning banner inline -->
+              @if (riskSvc.rtt()?.isAtRisk) {
+                <div class="rounded-lg p-2.5 text-xs flex items-start gap-2"
+                  [style.background]="riskSvc.rtt()?.status === 'FORCE_SELL_ZONE' ? 'rgba(239,68,68,.1)' : 'rgba(245,158,11,.1)'"
+                  [style.color]="riskSvc.rtt()?.status === 'FORCE_SELL_ZONE' ? '#f87171' : '#fbbf24'">
+                  <span>{{ riskSvc.rtt()?.status === 'FORCE_SELL_ZONE' ? '🚨' : '⚠️' }}</span>
+                  <span>{{ riskSvc.getRttStatusLabel(riskSvc.rtt()!.status) }}</span>
+                </div>
+              }
+            </div>
+          </app-card>
+
           <!-- Latest alerts teaser -->
           <app-card title="Cảnh báo gần đây" variant="default" [hasHeaderAction]="true">
             <ng-container slot="header-action">
@@ -176,10 +221,22 @@ import { inject } from '@angular/core';
       </div>
     </div>
   `,
+
 })
 export class DashboardComponent implements OnInit {
   public readonly marketData = inject(MarketDataService);
   public readonly portfolio = inject(PortfolioService);
+  public readonly riskSvc = inject(RiskService);
+  private readonly router = inject(Router);
+
+  readonly todayLabel = computed(() => {
+    const now = new Date();
+    const days = ['Chủ nhật', 'Thứ hai', 'Thứ ba', 'Thứ tư', 'Thứ năm', 'Thứ sáu', 'Thứ bảy'];
+    const d = String(now.getDate()).padStart(2, '0');
+    const m = String(now.getMonth() + 1).padStart(2, '0');
+    const y = now.getFullYear();
+    return `${days[now.getDay()]}, ${d}/${m}/${y}`;
+  });
 
   readonly loadingTable = signal(true);
   readonly activeMarketTab = signal('hose');
@@ -225,6 +282,10 @@ export class DashboardComponent implements OnInit {
 
     this.portfolio.loadWallet().subscribe();
     this.portfolio.loadPortfolio().subscribe();
+
+    // Load risk data for sidebar widget
+    this.riskSvc.loadBuyingPower().subscribe();
+    this.riskSvc.loadRtt().subscribe();
   }
 
   simulateLoad(): void {
@@ -236,6 +297,6 @@ export class DashboardComponent implements OnInit {
   }
 
   onStockClick(stock: StockRow): void {
-    console.log('Navigate to:', stock.symbol);
+    this.router.navigate(['/stocks', stock.symbol]);
   }
 }

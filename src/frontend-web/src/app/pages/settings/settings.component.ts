@@ -1,6 +1,6 @@
 import {
-    Component, signal, inject,
-    ChangeDetectionStrategy,
+  Component, signal, inject,
+  ChangeDetectionStrategy,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { CardComponent } from '../../shared/molecules/card/card.component';
@@ -12,13 +12,14 @@ import { InputComponent } from '../../shared/atoms/input/input.component';
 import { LabelComponent } from '../../shared/atoms/label/label.component';
 import { IconComponent } from '../../shared/atoms/icon/icon.component';
 import { ThemeService } from '../../core/services/theme.service';
+import { AuthService } from '../../core/services/auth.service';
 
 @Component({
-    selector: 'app-settings',
-    standalone: true,
-    imports: [CommonModule, CardComponent, TabNavComponent, FormFieldComponent, BadgeComponent, ButtonComponent, InputComponent, LabelComponent, IconComponent],
-    changeDetection: ChangeDetectionStrategy.OnPush,
-    template: `
+  selector: 'app-settings',
+  standalone: true,
+  imports: [CommonModule, CardComponent, TabNavComponent, FormFieldComponent, BadgeComponent, ButtonComponent, InputComponent, LabelComponent, IconComponent],
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  template: `
     <div class="p-4 md:p-6 space-y-6 animate-fade-in">
       <div>
         <h1 class="text-headline font-bold text-fg">Cài đặt tài khoản</h1>
@@ -80,7 +81,12 @@ import { ThemeService } from '../../core/services/theme.service';
                     <app-input inputId="pf-cccd" [(value)]="profile.cccd" [state]="'disabled'" />
                   </app-form-field>
                 </div>
-                <app-btn variant="primary" size="md" label="Lưu thay đổi" [loading]="isSaving()" (clicked)="save()" />
+                <div class="flex items-center gap-3">
+                  <app-btn variant="primary" size="md" label="Lưu thay đổi" [loading]="isSaving()" (clicked)="save()" />
+                  @if (saveSuccess()) {
+                    <span class="text-sm text-up animate-fade-in">✅ Đã lưu thành công!</span>
+                  }
+                </div>
               </div>
             </app-card>
           }
@@ -228,53 +234,59 @@ import { ThemeService } from '../../core/services/theme.service';
   `,
 })
 export class SettingsComponent {
-    readonly themeService = inject(ThemeService);
-    readonly activeSection = signal('profile');
-    readonly isSaving = signal(false);
-    readonly twoFaEnabled = signal(true);
-    readonly selectedLang = signal('vi');
+  readonly themeService = inject(ThemeService);
+  private readonly authService = inject(AuthService);
+  readonly activeSection = signal('profile');
+  readonly isSaving = signal(false);
+  readonly twoFaEnabled = signal(true);
+  readonly selectedLang = signal('vi');
+  readonly saveSuccess = signal(false);
 
-    readonly settingsNav = [
-        { id: 'profile', label: 'Hồ sơ cá nhân', icon: 'user' },
-        { id: 'security', label: 'Bảo mật', icon: 'check-circle' },
-        { id: 'notif', label: 'Thông báo', icon: 'bell' },
-        { id: 'theme', label: 'Giao diện', icon: 'moon' },
-    ];
+  readonly settingsNav = [
+    { id: 'profile', label: 'Hồ sơ cá nhân', icon: 'user' },
+    { id: 'security', label: 'Bảo mật', icon: 'check-circle' },
+    { id: 'notif', label: 'Thông báo', icon: 'bell' },
+    { id: 'theme', label: 'Giao diện', icon: 'moon' },
+  ];
 
-    profile = {
-        name: 'Nguyễn Văn A' as string | number,
-        phone: '0912 345 678' as string | number,
-        email: 'trader@quantiq.vn' as string | number,
-        cccd: '079 200 123 456' as string | number,
-    };
+  profile = {
+    name: this.authService.user()?.username ?? '' as string | number,
+    phone: '' as string | number,
+    email: this.authService.user()?.email ?? '' as string | number,
+    cccd: '' as string | number,
+  };
 
-    sec = { oldPass: '' as string | number, newPass: '' as string | number, confirmPass: '' as string | number };
+  sec = { oldPass: '' as string | number, newPass: '' as string | number, confirmPass: '' as string | number };
 
-    readonly sessions = [
-        { id: 1, device: 'Chrome · Windows 11', ip: '192.168.1.5', time: 'Hiện tại', icon: 'settings', current: true },
-        { id: 2, device: 'Safari · iPhone 15 Pro', ip: '118.70.22.1', time: 'Hôm qua', icon: 'user', current: false },
-        { id: 3, device: 'Firefox · macOS Sequoia', ip: '172.16.0.20', time: '2 ngày trước', icon: 'settings', current: false },
-    ];
+  readonly sessions = [
+    { id: 1, device: 'Chrome · Windows 11', ip: '192.168.1.5', time: 'Hiện tại', icon: 'settings', current: true },
+    { id: 2, device: 'Safari · iPhone 15 Pro', ip: '118.70.22.1', time: 'Hôm qua', icon: 'user', current: false },
+    { id: 3, device: 'Firefox · macOS Sequoia', ip: '172.16.0.20', time: '2 ngày trước', icon: 'settings', current: false },
+  ];
 
-    notifSettings = [
-        { id: 'price_alert', label: 'Cảnh báo giá', desc: 'Thông báo khi giá chạm ngưỡng cảnh báo', enabled: true },
-        { id: 'order_exec', label: 'Khớp lệnh', desc: 'Thông báo khi lệnh được khớp', enabled: true },
-        { id: 'news', label: 'Tin tức thị trường', desc: 'Tin nổi bật liên quan đến danh mục của bạn', enabled: false },
-        { id: 'weekly', label: 'Báo cáo tuần', desc: 'Tóm tắt hiệu suất danh mục mỗi tuần', enabled: true },
-        { id: 'marketing', label: 'Chương trình khuyến mãi', desc: 'Ưu đãi và tính năng mới từ QuantIQ', enabled: false },
-    ];
+  notifSettings = [
+    { id: 'price_alert', label: 'Cảnh báo giá', desc: 'Thông báo khi giá chạm ngưỡng cảnh báo', enabled: true },
+    { id: 'order_exec', label: 'Khớp lệnh', desc: 'Thông báo khi lệnh được khớp', enabled: true },
+    { id: 'news', label: 'Tin tức thị trường', desc: 'Tin nổi bật liên quan đến danh mục của bạn', enabled: false },
+    { id: 'weekly', label: 'Báo cáo tuần', desc: 'Tóm tắt hiệu suất danh mục mỗi tuần', enabled: true },
+    { id: 'marketing', label: 'Chương trình khuyến mãi', desc: 'Ưu đãi và tính năng mới từ QuantIQ', enabled: false },
+  ];
 
-    readonly languages = [
-        { id: 'vi', label: 'Tiếng Việt', flag: '🇻🇳' },
-        { id: 'en', label: 'English', flag: '🇺🇸' },
-    ];
+  readonly languages = [
+    { id: 'vi', label: 'Tiếng Việt', flag: '🇻🇳' },
+    { id: 'en', label: 'English', flag: '🇺🇸' },
+  ];
 
-    toggleTwoFa(): void {
-        this.twoFaEnabled.update(v => !v);
-    }
+  toggleTwoFa(): void {
+    this.twoFaEnabled.update(v => !v);
+  }
 
-    save(): void {
-        this.isSaving.set(true);
-        setTimeout(() => this.isSaving.set(false), 1000);
-    }
+  save(): void {
+    this.isSaving.set(true);
+    setTimeout(() => {
+      this.isSaving.set(false);
+      this.saveSuccess.set(true);
+      setTimeout(() => this.saveSuccess.set(false), 3000);
+    }, 800);
+  }
 }

@@ -1,26 +1,27 @@
 import {
-    Component, inject, signal,
-    ChangeDetectionStrategy,
+  Component, inject, signal,
+  ChangeDetectionStrategy,
 } from '@angular/core';
-import { RouterOutlet, RouterLink, RouterLinkActive } from '@angular/router';
+import { RouterOutlet, RouterLink, RouterLinkActive, Router } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import { ThemeService } from '../../core/services/theme.service';
+import { AuthService } from '../../core/services/auth.service';
 import { IconComponent } from '../../shared/atoms/icon/icon.component';
 import { BadgeComponent } from '../../shared/atoms/badge/badge.component';
 
 interface NavItem {
-    path: string;
-    label: string;
-    icon: string;
-    badge?: number;
+  path: string;
+  label: string;
+  icon: string;
+  badge?: number;
 }
 
 @Component({
-    selector: 'app-dashboard-layout',
-    standalone: true,
-    imports: [RouterOutlet, RouterLink, RouterLinkActive, CommonModule, IconComponent, BadgeComponent],
-    changeDetection: ChangeDetectionStrategy.OnPush,
-    template: `
+  selector: 'app-dashboard-layout',
+  standalone: true,
+  imports: [RouterOutlet, RouterLink, RouterLinkActive, CommonModule, IconComponent, BadgeComponent],
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  template: `
     <div class="flex h-screen overflow-hidden bg-bg text-fg">
 
       <!-- ===== SIDEBAR ===== -->
@@ -79,17 +80,19 @@ interface NavItem {
             }
           </button>
 
-          <!-- User avatar placeholder -->
+          <!-- User avatar -->
           @if (!sidebarCollapsed()) {
             <div class="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-surface-2 transition-colors cursor-pointer">
               <div class="w-7 h-7 rounded-full bg-up/20 flex items-center justify-center shrink-0">
                 <app-icon name="user" size="sm" class="text-up" />
               </div>
               <div class="flex-1 min-w-0 animate-fade-in">
-                <p class="text-small font-medium text-fg truncate">Trader A</p>
-                <p class="text-xs text-fg-muted truncate">trader&#64;quantiq.vn</p>
+                <p class="text-small font-medium text-fg truncate">{{ authService.user()?.username ?? 'Người dùng' }}</p>
+                <p class="text-xs text-fg-muted truncate">{{ authService.user()?.email ?? '' }}</p>
               </div>
-              <app-icon name="chevron-right" size="sm" class="text-fg-muted" />
+              <button (click)="logout()" class="p-1 rounded text-fg-muted hover:text-down transition-colors" title="Đăng xuất">
+                <app-icon name="log-out" size="sm" />
+              </button>
             </div>
           }
         </div>
@@ -166,16 +169,28 @@ interface NavItem {
   `,
 })
 export class DashboardLayoutComponent {
-    readonly themeService = inject(ThemeService);
-    readonly sidebarCollapsed = signal(false);
-    readonly mobileSidebarOpen = signal(false);
+  readonly themeService = inject(ThemeService);
+  readonly authService = inject(AuthService);
+  private readonly router = inject(Router);
+  readonly sidebarCollapsed = signal(false);
+  readonly mobileSidebarOpen = signal(false);
 
-    readonly navItems: NavItem[] = [
-        { path: '/dashboard', label: 'Tổng quan', icon: 'bar-chart-2' },
-        { path: '/portfolio', label: 'Danh mục', icon: 'pie-chart' },
-        { path: '/screener', label: 'Bộ lọc', icon: 'search' },
-        { path: '/alerts', label: 'Cảnh báo', icon: 'bell', badge: 3 },
-        { path: '/deposit', label: 'Nạp/Rút tiền', icon: 'wallet' },
-        { path: '/settings', label: 'Cài đặt', icon: 'settings' },
-    ];
+  logout(): void {
+    this.authService.logout().subscribe({
+      complete: () => this.router.navigate(['/auth/login']),
+      error: () => this.router.navigate(['/auth/login']),
+    });
+  }
+
+  readonly navItems: NavItem[] = [
+    { path: '/dashboard', label: 'Tổng quan', icon: 'bar-chart-2' },
+    { path: '/portfolio', label: 'Danh mục', icon: 'pie-chart' },
+    { path: '/screener', label: 'Bộ lọc', icon: 'search' },
+    { path: '/news', label: 'Tin tức', icon: 'rss' },
+    { path: '/alerts', label: 'Cảnh báo', icon: 'bell', badge: 3 },
+    { path: '/deposit', label: 'Nạp/Rút tiền', icon: 'wallet' },
+    { path: '/risk', label: 'Quản trị rủi ro', icon: 'shield' },
+    { path: '/leaderboard', label: 'Xếp hạng', icon: 'award' },
+    { path: '/settings', label: 'Cài đặt', icon: 'settings' },
+  ];
 }
