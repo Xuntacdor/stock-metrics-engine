@@ -12,10 +12,31 @@ using System.IdentityModel.Tokens.Jwt;
 using StackExchange.Redis;
 using Microsoft.OpenApi.Models;
 using PayOS;
+using Prometheus;
+using Serilog;
+using Serilog.Events;
 
 Env.TraversePath().Load();
 
+// ── Serilog: configure before host builds ────────────────────────────────────
+Log.Logger = new LoggerConfiguration()
+    .MinimumLevel.Information()
+    .MinimumLevel.Override("Microsoft", LogEventLevel.Warning)
+    .MinimumLevel.Override("System", LogEventLevel.Warning)
+    .Enrich.FromLogContext()
+    .WriteTo.Console(outputTemplate:
+        "[{Timestamp:HH:mm:ss} {Level:u3}] {SourceContext}: {Message:lj}{NewLine}{Exception}")
+    .WriteTo.File(
+        path: "logs/app-.json",
+        rollingInterval: RollingInterval.Day,
+        formatter: new Serilog.Formatting.Json.JsonFormatter(),
+        retainedFileCountLimit: 14)
+    .CreateLogger();
+
 var builder = WebApplication.CreateBuilder(args);
+
+// Wire Serilog into the ASP.NET host
+builder.Host.UseSerilog();
 
 builder.Configuration.AddEnvironmentVariables();
 
@@ -95,9 +116,14 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 
 builder.Services.AddAuthorization();
 
-builder.Services.AddSingleton<IConnectionMultiplexer>(sp => 
-    ConnectionMultiplexer.Connect("localhost:6379"));
+// ── Redis: read connection string from config ─────────────────────────────────
+var redisConnStr = builder.Configuration["Redis:ConnectionString"]
+    ?? "localhost:6379";
 
+builder.Services.AddSingleton<IConnectionMultiplexer>(sp =>
+    ConnectionMultiplexer.Connect(redisConnStr));
+
+// ── Application services ──────────────────────────────────────────────────────
 builder.Services.AddScoped<IUserRepository, UserRepository>();
 builder.Services.AddScoped<ITokenService, TokenService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
@@ -114,9 +140,11 @@ builder.Services.AddScoped<IPortfolioService, PortfolioService>();
 builder.Services.AddScoped<ITransactionService, TransactionService>();
 builder.Services.AddScoped<IWalletService, WalletService>();
 
-
 builder.Services.AddScoped<ICorporateActionRepository, CorporateActionRepository>();
 builder.Services.AddScoped<ICorporateActionService, CorporateActionService>();
+
+builder.Services.AddScoped<INewsRepository, NewsRepository>();
+builder.Services.AddScoped<ICommentRepository, CommentRepository>();
 
 builder.Services.AddHostedService<DividendPayoutWorker>();
 
@@ -136,6 +164,10 @@ builder.Services.AddScoped<IMarginRatioRepository, MarginRatioRepository>();
 builder.Services.AddScoped<IRiskAlertRepository, RiskAlertRepository>();
 builder.Services.AddScoped<IMarginRiskService, MarginRiskService>();
 builder.Services.AddHostedService<RiskMonitorWorker>();
+
+// ── Audit Trail ───────────────────────────────────────────────────────────────
+builder.Services.AddScoped<IAuditLogRepository, AuditLogRepository>();
+builder.Services.AddScoped<IAuditLogService, AuditLogService>();
 
 builder.Services.AddCors(options =>
 {
@@ -157,8 +189,7 @@ try
 }
 catch (Exception ex)
 {
-    var logger = app.Services.GetRequiredService<ILogger<Program>>();
-    logger.LogError(ex, "[DbSeeder] Lỗi khi seed dữ liệu. App sẽ tiếp tục chạy.");
+    Log.Error(ex, "[DbSeeder] Lỗi khi seed dữ liệu. App sẽ tiếp tục chạy.");
 }
 
 if (app.Environment.IsDevelopment())
@@ -168,14 +199,20 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
-app.UseStaticFiles(); 
+app.UseStaticFiles();
 
 app.UseCors("AllowAllOrigins");
+
+// ── Prometheus HTTP metrics middleware ────────────────────────────────────────
+app.UseHttpMetrics();
 
 app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
 app.MapHub<MarketHub>("/hubs/market");
+
+// ── Prometheus metrics endpoint ───────────────────────────────────────────────
+app.MapMetrics("/metrics");
 
 app.Run();

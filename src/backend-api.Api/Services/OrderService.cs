@@ -15,6 +15,7 @@ public class OrderService : IOrderService
     private readonly ISymbolRepository _symbolRepo;
     private readonly IMarginRiskService _riskService;
     private readonly QuantIQContext _context;
+    private readonly IAuditLogService _auditLog;
 
     public OrderService(
         IOrderRepository orderRepo,
@@ -23,7 +24,8 @@ public class OrderService : IOrderService
         ITransactionRepository transactionRepo,
         ISymbolRepository symbolRepo,
         IMarginRiskService riskService,
-        QuantIQContext context)
+        QuantIQContext context,
+        IAuditLogService auditLog)
     {
         _orderRepo = orderRepo;
         _portfolioRepo = portfolioRepo;
@@ -32,6 +34,7 @@ public class OrderService : IOrderService
         _symbolRepo = symbolRepo;
         _riskService = riskService;
         _context = context;
+        _auditLog = auditLog;
     }
 
     public async Task<OrderResponse> PlaceOrderAsync(string userId, PlaceOrderRequest request)
@@ -79,6 +82,18 @@ public class OrderService : IOrderService
             await dbTx.RollbackAsync();
             throw;
         }
+
+        // Audit Trail
+        await _auditLog.LogAsync(userId, "PlaceOrder", new
+        {
+            order.OrderId,
+            order.Symbol,
+            order.Side,
+            order.OrderType,
+            order.RequestQty,
+            order.Price,
+            order.Status
+        });
 
         return MapToResponse(order);
     }
@@ -137,6 +152,9 @@ public class OrderService : IOrderService
             await dbTx.RollbackAsync();
             throw;
         }
+
+        // Audit Trail
+        await _auditLog.LogAsync(userId, "CancelOrder", new { orderId, order.Symbol, order.Side });
     }
 
     private async Task HandleBuyPreCheck(CashWallet wallet, Order order)

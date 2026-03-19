@@ -7,21 +7,39 @@ namespace backend_api.Api.Services;
 public class SymbolService : ISymbolService
 {
     private readonly ISymbolRepository _symbolRepo;
+    private readonly ICacheService _cache;
+    private readonly ILogger<SymbolService> _logger;
 
-    public SymbolService(ISymbolRepository symbolRepo)
+    private const string AllSymbolsCacheKey = "symbols:all";
+    private static readonly TimeSpan SymbolCacheTtl = TimeSpan.FromSeconds(30);
+
+    public SymbolService(ISymbolRepository symbolRepo, ICacheService cache, ILogger<SymbolService> logger)
     {
         _symbolRepo = symbolRepo;
+        _cache = cache;
+        _logger = logger;
     }
 
     public async Task<IEnumerable<SymbolDto>> GetAllSymbolsAsync()
     {
+        var cached = await _cache.GetAsync<List<SymbolDto>>(AllSymbolsCacheKey);
+        if (cached != null)
+        {
+            _logger.LogDebug("[Cache HIT] {Key}", AllSymbolsCacheKey);
+            return cached;
+        }
+
+        _logger.LogDebug("[Cache MISS] {Key} — querying DB", AllSymbolsCacheKey);
         var symbols = await _symbolRepo.GetAllAsync();
-        return symbols.Select(s => new SymbolDto
+        var result = symbols.Select(s => new SymbolDto
         {
             Symbol = s.Symbol1,
             CompanyName = s.CompanyName,
             Exchange = s.Exchange
-        });
+        }).ToList();
+
+        await _cache.SetAsync(AllSymbolsCacheKey, result, SymbolCacheTtl);
+        return result;
     }
 
     public async Task<SymbolDto> CreateSymbolAsync(CreateSymbolRequest request)
@@ -44,6 +62,9 @@ public class SymbolService : ISymbolService
         await _symbolRepo.AddAsync(newSymbol);
         await _symbolRepo.SaveChangesAsync();
 
+        // Invalidate cache so next read fetches fresh data
+        await _cache.RemoveAsync(AllSymbolsCacheKey);
+
         return new SymbolDto
         {
             Symbol = newSymbol.Symbol1,
@@ -60,5 +81,8 @@ public class SymbolService : ISymbolService
 
         _symbolRepo.Delete(existingSymbol);
         await _symbolRepo.SaveChangesAsync();
+
+        // Invalidate cache
+        await _cache.RemoveAsync(AllSymbolsCacheKey);
     }
 }

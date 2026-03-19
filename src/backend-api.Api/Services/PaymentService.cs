@@ -16,6 +16,7 @@ public class PaymentService : IPaymentService
     private readonly QuantIQContext _context;
     private readonly PayOSClient _payOS;
     private readonly ILogger<PaymentService> _logger;
+    private readonly IAuditLogService _auditLog;
 
     public PaymentService(
         IDepositRepository depositRepo,
@@ -23,7 +24,8 @@ public class PaymentService : IPaymentService
         ITransactionRepository transactionRepo,
         QuantIQContext context,
         PayOSClient payOS,
-        ILogger<PaymentService> logger)
+        ILogger<PaymentService> logger,
+        IAuditLogService auditLog)
     {
         _depositRepo     = depositRepo;
         _walletRepo      = walletRepo;
@@ -31,6 +33,7 @@ public class PaymentService : IPaymentService
         _context         = context;
         _payOS           = payOS;
         _logger          = logger;
+        _auditLog        = auditLog;
     }
 
 
@@ -171,6 +174,14 @@ public class PaymentService : IPaymentService
             _logger.LogInformation(
                 "Payment processed: UserId={UserId}, OrderCode={Code}, Amount={Amount}, NewBalance={Balance}",
                 deposit.UserId, deposit.OrderCode, deposit.Amount, wallet.Balance);
+
+            // Audit Trail
+            await _auditLog.LogAsync(deposit.UserId, "Deposit", new
+            {
+                deposit.OrderCode,
+                deposit.Amount,
+                NewBalance = wallet.Balance
+            });
         }
         catch (Exception ex)
         {

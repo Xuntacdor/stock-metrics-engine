@@ -33,7 +33,9 @@ public class RiskController : ControllerBase
         if (userId == null) return Unauthorized();
 
         var wallet = await _walletRepo.GetByUserIdAsync(userId);
-        if (wallet == null) return NotFound("Wallet not found.");
+
+        if (wallet == null)
+            return Ok(new BuyingPowerResponse(0m, 0m, 0m));
 
         var buyingPower = await _riskService.GetBuyingPowerAsync(userId);
         var availableCash = wallet.AvailableBalance ?? 0m;
@@ -49,7 +51,10 @@ public class RiskController : ControllerBase
         if (userId == null) return Unauthorized();
 
         var wallet = await _walletRepo.GetByUserIdAsync(userId);
-        if (wallet == null) return NotFound("Wallet not found.");
+
+        // User chưa deposit → wallet chưa tồn tại, trả về NO_LOAN thay vì 404
+        if (wallet == null)
+            return Ok(new RttResponse(999m, 0m, false, "NO_LOAN"));
 
         var loanAmount = wallet.LoanAmount ?? 0m;
         var rtt = await _riskService.CalculateRttAsync(userId);

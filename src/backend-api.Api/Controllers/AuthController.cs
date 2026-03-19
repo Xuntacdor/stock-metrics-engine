@@ -45,8 +45,8 @@ public class AuthController : ControllerBase
             {
                 HttpOnly = true,
                 Expires = DateTime.UtcNow.AddDays(30),
-                Secure = true,
-                SameSite = SameSiteMode.Strict
+                Secure = false,        
+                SameSite = SameSiteMode.Lax
             };
             Response.Cookies.Append("refreshToken", response.RefreshToken, cookieOptions);
             response.RefreshToken = "";
@@ -86,8 +86,8 @@ public class AuthController : ControllerBase
             {
                 HttpOnly = true,
                 Expires = DateTime.UtcNow.AddDays(30),
-                Secure = true,
-                SameSite = SameSiteMode.Strict
+                Secure = false,        // false để hoạt động với HTTP localhost
+                SameSite = SameSiteMode.Lax
             };
             Response.Cookies.Append("refreshToken", response.RefreshToken, cookieOptions);
 
