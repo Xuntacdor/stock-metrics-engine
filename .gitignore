@@ -394,3 +394,5 @@ docker-compose.override.yml
 logs/
 *.log
 
+.claude/
+
