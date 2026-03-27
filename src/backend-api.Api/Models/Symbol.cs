@@ -11,6 +11,13 @@ public partial class Symbol
 
     public string? Exchange { get; set; }
 
+    public string? Sector { get; set; }
+
+    public decimal? Pe { get; set; }
+
+    /// <summary>Market capitalisation in billions VND.</summary>
+    public decimal? MarketCap { get; set; }
+
     public virtual ICollection<Candle> Candles { get; set; } = new List<Candle>();
 
     public virtual ICollection<MarginRatio> MarginRatios { get; set; } = new List<MarginRatio>();

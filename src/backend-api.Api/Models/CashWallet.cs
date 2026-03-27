@@ -1,6 +1,3 @@
-﻿using System;
-using System.Collections.Generic;
-
 namespace backend_api.Api.Models;
 
 public partial class CashWallet
@@ -9,13 +6,14 @@ public partial class CashWallet
 
     public string UserId { get; set; } = null!;
 
-    public decimal? Balance { get; set; }
+    public decimal Balance { get; set; }
 
-    public decimal? LockedAmount { get; set; }
+    public decimal LockedAmount { get; set; }
 
-    public decimal? AvailableBalance { get; set; }
+    /// <summary>Computed SQL column: Balance − LockedAmount.</summary>
+    public decimal AvailableBalance { get; set; }
 
-    public decimal? LoanAmount { get; set; }
+    public decimal LoanAmount { get; set; }
 
     public DateTime? LastUpdated { get; set; }
 

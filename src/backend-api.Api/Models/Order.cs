@@ -1,5 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
+using backend_api.Api.Constants;
 
 namespace backend_api.Api.Models;
 
@@ -15,19 +14,20 @@ public partial class Order
 
     public string OrderType { get; set; } = null!;
 
-    public string? Status { get; set; }
+    public string Status { get; set; } = OrderStatus.Pending;
 
     public int RequestQty { get; set; }
 
     public decimal Price { get; set; }
 
-    public int? MatchedQty { get; set; }
+    public int MatchedQty { get; set; }
 
+    /// <summary>Null while the order is PENDING (not yet matched).</summary>
     public decimal? AvgMatchedPrice { get; set; }
 
-    public DateTime? CreatedAt { get; set; }
+    public DateTime CreatedAt { get; set; }
 
-    public DateTime? UpdatedAt { get; set; }
+    public DateTime UpdatedAt { get; set; }
 
     public virtual Symbol SymbolNavigation { get; set; } = null!;
 

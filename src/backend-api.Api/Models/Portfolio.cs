@@ -1,6 +1,3 @@
-﻿using System;
-using System.Collections.Generic;
-
 namespace backend_api.Api.Models;
 
 public partial class Portfolio
@@ -9,13 +6,14 @@ public partial class Portfolio
 
     public string Symbol { get; set; } = null!;
 
-    public int? TotalQuantity { get; set; }
+    public int TotalQuantity { get; set; }
 
-    public int? LockedQuantity { get; set; }
+    public int LockedQuantity { get; set; }
 
-    public int? AvailableQuantity { get; set; }
+    /// <summary>Computed SQL column: TotalQuantity − LockedQuantity.</summary>
+    public int AvailableQuantity { get; set; }
 
-    public decimal? AvgCostPrice { get; set; }
+    public decimal AvgCostPrice { get; set; }
 
     public byte[] RowVersion { get; set; } = null!;
 
