@@ -5,13 +5,6 @@ using Microsoft.EntityFrameworkCore;
 
 namespace backend_api.Api.Repositories;
 
-public interface ICommentRepository
-{
-    Task<List<CommentDto>> GetBySymbolAsync(string symbol, int limit = 50);
-    Task<CommentDto> CreateAsync(string symbol, string userId, string content);
-    Task<bool> DeleteAsync(int commentId, string requestingUserId, bool isAdmin);
-}
-
 public class CommentRepository : ICommentRepository
 {
     private readonly QuantIQContext _ctx;

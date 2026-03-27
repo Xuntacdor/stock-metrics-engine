@@ -5,14 +5,6 @@ using Microsoft.EntityFrameworkCore;
 
 namespace backend_api.Api.Repositories;
 
-public interface INewsRepository
-{
-    Task<List<NewsArticleDto>> GetBySymbolAsync(string? symbol, int limit = 20);
-    Task<SentimentSummaryDto> GetSentimentSummaryAsync(string symbol, int days = 7);
-    Task<bool> ExistsByUrlAsync(string url);
-    Task UpsertAsync(NewsArticle article);
-}
-
 public class NewsRepository : INewsRepository
 {
     private readonly QuantIQContext _ctx;
@@ -53,6 +45,42 @@ public class NewsRepository : INewsRepository
             : "NEUTRAL";
 
         return new SentimentSummaryDto(symbol.ToUpper(), total, bullish, bearish, neutral, bPct, rPct, nPct, signal);
+    }
+
+    public async Task<List<SentimentDayDto>> GetSentimentTrendAsync(string symbol, int days = 30)
+    {
+        var since = DateTime.UtcNow.AddDays(-days);
+
+        var articles = await _ctx.NewsArticles
+            .Where(a => a.Symbol == symbol.ToUpper()
+                     && a.PublishedAt >= since
+                     && a.Sentiment != null)
+            .Select(a => new { a.PublishedAt, a.Sentiment, a.SentimentScore })
+            .ToListAsync();
+
+        var grouped = articles
+            .GroupBy(a => DateOnly.FromDateTime(a.PublishedAt!.Value.ToUniversalTime()))
+            .OrderBy(g => g.Key)
+            .Select(g =>
+            {
+                int total   = g.Count();
+                int bullish = g.Count(a => a.Sentiment == "positive");
+                int bearish = g.Count(a => a.Sentiment == "negative");
+                int neutral = g.Count(a => a.Sentiment == "neutral");
+                double avg  = g.Where(a => a.SentimentScore.HasValue)
+                               .Select(a => a.SentimentScore!.Value)
+                               .DefaultIfEmpty(0.5)
+                               .Average();
+
+                string signal = bullish > bearish && bullish > neutral ? "BULLISH"
+                              : bearish > bullish && bearish > neutral ? "BEARISH"
+                              : "NEUTRAL";
+
+                return new SentimentDayDto(g.Key, total, bullish, bearish, neutral, Math.Round(avg, 4), signal);
+            })
+            .ToList();
+
+        return grouped;
     }
 
     public async Task<bool> ExistsByUrlAsync(string url)
