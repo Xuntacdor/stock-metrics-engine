@@ -3,7 +3,7 @@ News Crawler — QuantIQ Platform
 Crawl RSS từ CafeF & Tin nhanh chứng khoán, phân tích sentiment, lưu SQL Server.
 
 Chạy thủ công: python news_crawler.py
-Chạy định kỳ (cron): */15 * * * * python /path/to/news_crawler.py
+Chạy tự động:  Celery beat (celery_app.py) — task 'crawl_news_task' mỗi 15 phút.
 """
 
 import os

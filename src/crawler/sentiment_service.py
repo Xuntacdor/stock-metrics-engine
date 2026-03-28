@@ -31,11 +31,17 @@ app = FastAPI(
     version="1.0.0",
 )
 
+_ALLOWED_ORIGINS = [
+    o.strip()
+    for o in os.getenv("CORS_ALLOWED_ORIGINS", "http://localhost:4200,http://localhost:5000").split(",")
+    if o.strip()
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=_ALLOWED_ORIGINS,
+    allow_methods=["POST", "GET"],
+    allow_headers=["Content-Type"],
 )
 
 
