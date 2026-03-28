@@ -1,51 +1,23 @@
 -- =============================================================================
--- Primary SQL Server: Schedule regular backups for log-shipping to secondary
--- Run once on the primary server (stock_db_primary container)
+-- Primary SQL Server: set FULL recovery model so transaction-log backups work.
+-- This script is executed once by the db-backup sidecar on first start.
+-- The actual backup scheduling is handled by backup-loop.sh.
 -- =============================================================================
 
 USE master;
 GO
 
--- ── Enable SQL Server Agent (required for jobs) ───────────────────────────────
--- Note: In Docker, you may need to run this manually or via sqlcmd
+-- Switch the database to FULL recovery (SIMPLE does not support log shipping)
+IF EXISTS (SELECT 1 FROM sys.databases WHERE name = 'QuantIQ_DB')
+BEGIN
+    ALTER DATABASE [QuantIQ_DB] SET RECOVERY FULL;
+    PRINT 'QuantIQ_DB recovery model set to FULL.';
+END
+ELSE
+BEGIN
+    PRINT 'QuantIQ_DB not found — will be set to FULL when the app creates it.';
+END
+GO
 
--- ── Create backup directory ───────────────────────────────────────────────────
-DECLARE @BackupDir NVARCHAR(200) = N'/backups';
-
--- ── Full backup (run manually first time, then weekly) ───────────────────────
--- Execute this SQL to take the initial full backup:
--- BACKUP DATABASE [QuantIQ]
--- TO DISK = N'/backups/QuantIQ_FULL.bak'
--- WITH COMPRESSION, STATS = 10;
-
--- ── Transaction log backup job (every 5 minutes) ─────────────────────────────
--- Note: SQL Server Express does not support SQL Agent.
--- For Docker environments, use the companion cron script below.
--- For SQL Server Standard/Enterprise, create a SQL Agent job:
-
--- EXEC msdb.dbo.sp_add_job @job_name = N'QuantIQ_LogShipping_Backup';
--- EXEC msdb.dbo.sp_add_jobstep
---     @job_name  = N'QuantIQ_LogShipping_Backup',
---     @step_name = N'Backup Transaction Log',
---     @command   = N'
---         BACKUP LOG [QuantIQ]
---         TO DISK = N''/backups/QuantIQ_LOG_'' + CONVERT(VARCHAR, GETDATE(), 112) + ''_'' + REPLACE(CONVERT(VARCHAR(8), GETDATE(), 108),'':'','''') + ''.bak''
---         WITH COMPRESSION;
---     ';
-
--- ── Simple manual log backup script ──────────────────────────────────────────
--- Run this periodically from a cron job or Task Scheduler pointing to sqlcmd:
-/*
-DECLARE @LogBak NVARCHAR(500) =
-    N'/backups/QuantIQ_LOG_' +
-    CONVERT(NVARCHAR, GETDATE(), 112) + N'_' +
-    REPLACE(CONVERT(NVARCHAR(8), GETDATE(), 108), N':', N'') + N'.bak';
-
-BACKUP LOG [QuantIQ]
-TO DISK = @LogBak
-WITH COMPRESSION, STATS = 5;
-*/
-
-PRINT 'Primary backup configuration script loaded.';
-PRINT 'Run the BACKUP DATABASE command manually to create the initial full backup.';
+PRINT 'init-primary.sql complete.';
 GO

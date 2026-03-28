@@ -1,4 +1,22 @@
 /* ==========================================================================
+   ⚠  DEPRECATED — DO NOT USE FOR NEW SCHEMA CHANGES
+   ──────────────────────────────────────────────────────────────────────────
+   This file was the original hand-written DDL script used during early
+   development. It is kept for historical reference ONLY.
+
+   The single source of truth for the database schema is now EF Core
+   Migrations located in:
+       src/backend-api.Api/Migrations/
+
+   To apply the current schema to a fresh database run:
+       dotnet ef database update
+       (from the src/backend-api.Api directory)
+
+   Any new table, column, or index change MUST be expressed as a new
+   migration (dotnet ef migrations add <Name>), not as a change to this file.
+   ========================================================================== */
+
+/* ==========================================================================
    FIX LỖI 1934: Bật các tùy chọn bắt buộc cho Computed Columns
    ========================================================================== */
 SET ANSI_NULLS ON;

@@ -26,7 +26,7 @@ DB_NAME="${DB_NAME:-QuantIQ}"
 BACKUP_DIR="${BACKUP_DIR:-/backups}"
 SECONDARY_RESTORE_DIR="${SECONDARY_RESTORE_DIR:-/restore}"
 
-SQLCMD="/opt/mssql-tools/bin/sqlcmd"
+SQLCMD="/opt/mssql-tools18/bin/sqlcmd"
 
 echo "[$(date)] Starting SQL Server replication setup..."
 echo "[$(date)] Primary: $PRIMARY_HOST | DB: $DB_NAME"
@@ -34,7 +34,7 @@ echo "[$(date)] Primary: $PRIMARY_HOST | DB: $DB_NAME"
 # ── Wait for secondary SQL Server to start ──────────────────────────────────
 echo "[$(date)] Waiting for secondary SQL Server..."
 for i in {1..30}; do
-  if $SQLCMD -S localhost -U sa -P "$SA_PASSWORD" -Q "SELECT 1" > /dev/null 2>&1; then
+  if $SQLCMD -S localhost -U sa -P "$SA_PASSWORD" -C -Q "SELECT 1" > /dev/null 2>&1; then
     echo "[$(date)] Secondary SQL Server is up."
     break
   fi
@@ -51,7 +51,7 @@ FULL_BAK="$BACKUP_DIR/${DB_NAME}_FULL.bak"
 
 if [ -f "$FULL_BAK" ]; then
   echo "[$(date)] Found full backup: $FULL_BAK. Restoring..."
-  $SQLCMD -S localhost -U sa -P "$SA_PASSWORD" -Q "
+  $SQLCMD -S localhost -U sa -P "$SA_PASSWORD" -C -Q "
     IF DB_ID('${DB_NAME}_Replica') IS NOT NULL
       DROP DATABASE [${DB_NAME}_Replica];
 
@@ -76,7 +76,7 @@ echo "[$(date)] Starting continuous log-shipping loop (every 60s)..."
 while true; do
   for LOG_BAK in $(ls "$BACKUP_DIR"/${DB_NAME}_LOG_*.bak 2>/dev/null | sort); do
     echo "[$(date)] Applying log: $LOG_BAK"
-    $SQLCMD -S localhost -U sa -P "$SA_PASSWORD" -Q "
+    $SQLCMD -S localhost -U sa -P "$SA_PASSWORD" -C -Q "
       RESTORE LOG [${DB_NAME}_Replica]
       FROM DISK = N'$LOG_BAK'
       WITH NORECOVERY, STATS = 5;
