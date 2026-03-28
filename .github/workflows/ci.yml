@@ -1,0 +1,95 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  # ── .NET API ───────────────────────────────────────────────────────────────
+  api:
+    name: .NET build & test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: src/backend-api.Api
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Restore dependencies
+        run: dotnet restore
+
+      - name: Build
+        run: dotnet build --no-restore --configuration Release
+
+      - name: Run tests
+        run: dotnet test --no-build --configuration Release --verbosity normal
+        # Tests live in a sibling test project; skip if none exist yet
+        continue-on-error: false
+
+  # ── Angular frontend ───────────────────────────────────────────────────────
+  frontend:
+    name: Angular lint & build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: src/frontend-web
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: src/frontend-web/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build (production)
+        run: npm run build -- --configuration production
+
+  # ── Python crawler ─────────────────────────────────────────────────────────
+  crawler:
+    name: Python lint
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: src/crawler
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install linters
+        run: pip install flake8
+
+      - name: Lint
+        run: flake8 . --max-line-length=120 --exclude=__pycache__,.venv
+
+  # ── Docker Compose lint ────────────────────────────────────────────────────
+  compose-lint:
+    name: Docker Compose config check
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate docker-compose.yml
+        run: docker compose config --quiet
