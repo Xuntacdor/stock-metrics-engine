@@ -7,7 +7,6 @@ Start: uvicorn sentiment_service:app --host 0.0.0.0 --port 8001 --workers 1
 
 import os
 import logging
-from functools import lru_cache
 from typing import Optional
 
 from fastapi import FastAPI, HTTPException
@@ -108,8 +107,8 @@ def analyze(req: AnalyzeRequest):
         # top_k=1 returns [[{label, score}]]
         top = results[0] if isinstance(results[0], dict) else results[0][0]
         raw_label = top["label"]
-        score     = round(float(top["score"]), 4)
-        label     = LABEL_MAP.get(raw_label, "neutral")
+        score = round(float(top["score"]), 4)
+        label = LABEL_MAP.get(raw_label, "neutral")
         return AnalyzeResponse(label=label, score=score, raw_label=raw_label)
     except Exception as e:
         log.error(f"Inference error: {e}")

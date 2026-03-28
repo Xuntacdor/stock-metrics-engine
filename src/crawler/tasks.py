@@ -7,7 +7,6 @@ Each task wraps the existing crawler logic with:
   - Structured logging with task ID for traceability
 """
 
-import logging
 import time
 
 from celery import Task

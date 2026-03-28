@@ -25,6 +25,8 @@ log = logging.getLogger(__name__)
 
 # ── Config ─────────────────────────────────────────────────────────────────────
 # Try to read individual vars first; fall back to parsing ConnectionStrings__DefaultConnection
+
+
 def _parse_conn_string():
     """Parse 'Server=...;Database=...;User Id=...;Password=...;' style connection string."""
     conn_str = os.getenv("ConnectionStrings__DefaultConnection", "")
@@ -35,12 +37,13 @@ def _parse_conn_string():
             parsed[k.strip().lower()] = v.strip()
     return parsed
 
+
 _cs = _parse_conn_string()
 
-DB_SERVER   = os.getenv("DB_SERVER")   or _cs.get("server", "localhost").split(",")[0]
-DB_PORT     = "1433"
-DB_NAME     = os.getenv("DB_NAME")     or _cs.get("database", "QuantIQ_DB")
-DB_USER     = os.getenv("DB_USER")     or _cs.get("user id", "sa")
+DB_SERVER = os.getenv("DB_SERVER") or _cs.get("server", "localhost").split(",")[0]
+DB_PORT = "1433"
+DB_NAME = os.getenv("DB_NAME") or _cs.get("database", "QuantIQ_DB")
+DB_USER = os.getenv("DB_USER") or _cs.get("user id", "sa")
 DB_PASSWORD = os.getenv("DB_PASSWORD") or _cs.get("password", "")
 
 SENTIMENT_URL = os.getenv("SENTIMENT_SERVICE_URL", "http://localhost:8001/analyze")
@@ -55,12 +58,14 @@ RSS_FEEDS = [
 
 # Danh sách mã CK phổ biến (sẽ detect trong title/summary)
 WATCHLIST = [
-    "FPT","VIC","VHM","VNM","MWG","ACB","TCB","VCB","BID","CTG",
-    "HPG","HSG","MSN","MBB","STB","SSI","VND","HDB","TPB","LPB",
-    "VRE","GAS","PLX","PNJ","REE","SHB","EIB","VCI","DGC","DCM",
+    "FPT", "VIC", "VHM", "VNM", "MWG", "ACB", "TCB", "VCB", "BID", "CTG",
+    "HPG", "HSG", "MSN", "MBB", "STB", "SSI", "VND", "HDB", "TPB", "LPB",
+    "VRE", "GAS", "PLX", "PNJ", "REE", "SHB", "EIB", "VCI", "DGC", "DCM",
 ]
 
 # ── Database ────────────────────────────────────────────────────────────────────
+
+
 def get_conn():
     conn_str = (
         f"DRIVER={{ODBC Driver 18 for SQL Server}};"
@@ -79,11 +84,13 @@ def article_exists(cursor, url: str) -> bool:
 
 
 def insert_article(cursor, article: dict) -> None:
-    cursor.execute("""
+    sql = """
         INSERT INTO NewsArticles
             (Symbol, Title, Url, Source, Summary, PublishedAt, Sentiment, SentimentScore)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    """,
+    """
+    cursor.execute(
+        sql,
         article.get("symbol"),
         article["title"][:500],
         article["url"][:1000],
@@ -137,7 +144,7 @@ def crawl_feed(feed_url: str, source: str, cursor) -> int:
 
     saved = 0
     for entry in feed.entries:
-        url   = entry.get("link", "").strip()
+        url = entry.get("link", "").strip()
         title = entry.get("title", "").strip()
         if not url or not title:
             continue
@@ -149,9 +156,9 @@ def crawl_feed(feed_url: str, source: str, cursor) -> int:
         summary = re.sub(r"<[^>]+>", "", summary)
 
         full_text = f"{title}. {summary}"
-        symbol    = detect_symbol(full_text)
+        symbol = detect_symbol(full_text)
         sentiment, score = analyze_sentiment(full_text)
-        pub_date  = parse_date(entry)
+        pub_date = parse_date(entry)
 
         article = {
             "symbol": symbol,
@@ -179,9 +186,9 @@ def crawl_feed(feed_url: str, source: str, cursor) -> int:
 # ── Main ────────────────────────────────────────────────────────────────────────
 def main():
     log.info("=== QuantIQ News Crawler started ===")
-    conn   = get_conn()
+    conn = get_conn()
     cursor = conn.cursor()
-    total  = 0
+    total = 0
 
     for url, source in RSS_FEEDS:
         saved = crawl_feed(url, source, cursor)
