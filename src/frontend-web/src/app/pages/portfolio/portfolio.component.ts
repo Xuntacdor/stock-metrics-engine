@@ -4,6 +4,7 @@ import { RouterLink } from '@angular/router';
 import { PortfolioService } from '../../core/services/portfolio.service';
 import { RiskService } from '../../core/services/risk.service';
 import { TransactionService, TransactionResponse } from '../../core/services/transaction.service';
+import { ToastService } from '../../core/services/toast.service';
 import { PortfolioSummaryComponent } from '../../shared/organisms/portfolio-summary/portfolio-summary.component';
 import { TabNavComponent, type TabItem } from '../../shared/molecules/tab-nav/tab-nav.component';
 import { CardComponent } from '../../shared/molecules/card/card.component';
@@ -271,6 +272,7 @@ export class PortfolioComponent implements OnInit {
   public readonly portfolio = inject(PortfolioService);
   public readonly riskService = inject(RiskService);
   private readonly txService = inject(TransactionService);
+  private readonly toast = inject(ToastService);
 
   readonly loading = signal(true);
   readonly loadingTx = signal(false);
@@ -327,7 +329,10 @@ export class PortfolioComponent implements OnInit {
     this.portfolio.loadWallet().subscribe();
     this.portfolio.loadPortfolio().subscribe({
       next: () => this.loading.set(false),
-      error: () => this.loading.set(false),
+      error: () => {
+        this.loading.set(false);
+        this.toast.error('Không thể tải danh mục. Vui lòng thử lại.');
+      },
     });
     this.riskService.loadBuyingPower().subscribe();
     this.riskService.loadRtt().subscribe();
@@ -345,7 +350,10 @@ export class PortfolioComponent implements OnInit {
         this.transactions.set(sorted);
         this.loadingTx.set(false);
       },
-      error: () => this.loadingTx.set(false),
+      error: () => {
+        this.loadingTx.set(false);
+        this.toast.error('Không thể tải lịch sử giao dịch.');
+      },
     });
   }
 }

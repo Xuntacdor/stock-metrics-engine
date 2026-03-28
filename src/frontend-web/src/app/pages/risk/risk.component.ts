@@ -317,11 +317,11 @@ import { TabNavComponent, type TabItem } from '../../shared/molecules/tab-nav/ta
               </tr>
             </thead>
             <tbody>
-              @for (r of marginRatioExamples; track r.symbol) {
+              @for (r of riskSvc.marginRatios(); track r.symbol) {
                 <tr class="border-b border-border/40 hover:bg-surface-2 transition-colors">
                   <td class="py-2.5 font-semibold text-fg">{{ r.symbol }}</td>
-                  <td class="py-2.5 text-right font-numeric text-up">{{ r.initial }}%</td>
-                  <td class="py-2.5 text-right font-numeric text-warn">{{ r.maintenance }}%</td>
+                  <td class="py-2.5 text-right font-numeric text-up">{{ r.initialRate }}%</td>
+                  <td class="py-2.5 text-right font-numeric text-warn">{{ r.maintenanceRate }}%</td>
                   <td class="py-2.5 text-right">
                     <span class="status-chip chip-safe text-xs">Hiệu lực</span>
                   </td>
@@ -347,16 +347,6 @@ export class RiskComponent implements OnInit {
     { id: 'all', label: 'Tất cả' },
     { id: 'CALL_MARGIN', label: 'Call Margin' },
     { id: 'FORCE_SELL', label: 'Force Sell' },
-  ];
-
-  readonly marginRatioExamples = [
-    { symbol: 'FPT', initial: 50, maintenance: 30 },
-    { symbol: 'VNM', initial: 50, maintenance: 30 },
-    { symbol: 'HPG', initial: 40, maintenance: 25 },
-    { symbol: 'VHM', initial: 40, maintenance: 25 },
-    { symbol: 'TCB', initial: 35, maintenance: 20 },
-    { symbol: 'STB', initial: 30, maintenance: 18 },
-    { symbol: 'PENNY', initial: 0, maintenance: 0 },
   ];
 
   // Buying-power used % (based on available cash vs total buying power)
@@ -417,10 +407,11 @@ export class RiskComponent implements OnInit {
   refresh(): void {
     this.loading.set(true);
     let done = 0;
-    const tryDone = () => { if (++done >= 3) this.loading.set(false); };
+    const tryDone = () => { if (++done >= 4) this.loading.set(false); };
 
     this.riskSvc.loadBuyingPower().subscribe({ next: tryDone, error: tryDone });
     this.riskSvc.loadRtt().subscribe({ next: tryDone, error: tryDone });
     this.riskSvc.loadAlerts(50).subscribe({ next: tryDone, error: tryDone });
+    this.riskSvc.loadMarginRatios().subscribe({ next: tryDone, error: tryDone });
   }
 }

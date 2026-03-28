@@ -1,4 +1,7 @@
-import { Component, input, signal, computed, ChangeDetectionStrategy, inject, OnInit, effect } from '@angular/core';
+import {
+  Component, input, signal, computed,
+  ChangeDetectionStrategy, inject, OnInit, effect
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { CandleChartComponent } from '../../shared/organisms/candle-chart/candle-chart.component';
@@ -11,248 +14,87 @@ import { ChartService } from '../../core/services/chart.service';
 import { MarketDataService } from '../../core/services/market-data.service';
 import { NewsService, NewsArticle, SentimentSummary, NewsComment } from '../../core/services/news.service';
 import { AuthService } from '../../core/services/auth.service';
+import { ToastService } from '../../core/services/toast.service';
+import { AlertService } from '../../core/services/alert.service';
+import { OrderService } from '../../core/services/order.service';
+
+export interface OrderBookLevel {
+  bidPrice: number;
+  bidVol: number;
+  askPrice: number;
+}
 
 @Component({
   selector: 'app-stock-detail',
   standalone: true,
-  imports: [CommonModule, FormsModule, CandleChartComponent, CardComponent, PriceDisplayComponent, BadgeComponent, ButtonComponent, IconComponent],
+  imports: [
+    CommonModule, FormsModule,
+    CandleChartComponent, CardComponent, PriceDisplayComponent,
+    BadgeComponent, ButtonComponent, IconComponent,
+  ],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  styles: [`
-    .art-row { padding: .6rem 0; border-bottom: 1px solid var(--color-border, #2d3250); cursor: pointer; }
-    .art-row:last-child { border-bottom: none; }
-    .art-row:hover .art-title { text-decoration: underline; }
-    .art-title { font-size: .8rem; font-weight: 500; color: var(--color-fg, #e5e7eb); line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-    .sent-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
-    .positive { background: #22c55e; }
-    .negative { background: #ef4444; }
-    .neutral  { background: #6b7280; }
-    .comment-item { padding: .75rem 0; border-bottom: 1px solid var(--color-border,#2d3250); }
-    .comment-item:last-child { border-bottom: none; }
-  `],
-  template: `
-    <div class="p-4 md:p-6 space-y-6 animate-fade-in">
-      <!-- Header -->
-      <div class="flex items-start justify-between gap-4 flex-wrap">
-        <div>
-          <div class="flex items-center gap-3 mb-2">
-            <h1 class="text-headline font-bold text-fg">{{ symbol() }}</h1>
-            <app-badge variant="info" size="sm">HOSE</app-badge>
-            <app-badge variant="neutral" size="sm">{{ stockResult()?.name || symbol() }}</app-badge>
-
-            <!-- Sentiment badge -->
-            @if (sentimentSummary()) {
-              <span [class]="'px-2 py-0.5 rounded-full text-xs font-semibold ' + signalClass(sentimentSummary()!.overallSignal)">
-                {{ signalLabel(sentimentSummary()!.overallSignal) }}
-              </span>
-            }
-          </div>
-          @if (stockResult()) {
-            <app-price-display [data]="{
-              symbol: stockResult()!.symbol,
-              price: stockResult()!.price,
-              refPrice: stockResult()!.refPrice,
-              ceilPrice: stockResult()!.ceilPrice,
-              floorPrice: stockResult()!.floorPrice,
-              change: stockResult()!.change,
-              changePct: stockResult()!.changePct,
-              volume: stockResult()!.volume
-            }" layout="full" [showVolume]="true" />
-          }
-        </div>
-        <div class="flex gap-2">
-          <app-btn variant="primary" size="md" label="Đặt lệnh MUA" />
-          <app-btn variant="danger"  size="md" label="Đặt lệnh BÁN" />
-          <app-btn variant="outline" size="md">
-            <app-icon name="bell" size="md" />
-          </app-btn>
-        </div>
-      </div>
-
-      <!-- Layout: Chart + Sidebar -->
-      <div class="grid grid-cols-1 xl:grid-cols-3 gap-6">
-        <!-- Chart (2/3) -->
-        <div class="xl:col-span-2 h-[480px]">
-          @if (stockResult()) {
-            <app-candle-chart
-              [symbol]="symbol()"
-              [candles]="chartCandles()"
-              [loading]="loadingChart()"
-              [showIndicators]="true"
-              [lastPrice]="stockResult()!.price"
-              [lastChangePct]="stockResult()!.changePct"
-              [rsi]="28.5"
-              [macd]="0.42"
-              [ma20]="stockResult()!.price * 0.98"
-              [ma50]="stockResult()!.price * 0.96"
-            />
-          }
-        </div>
-
-        <!-- Sidebar (1/3) -->
-        <div class="space-y-4">
-          <!-- Order book -->
-          <app-card title="Sổ lệnh" variant="elevated">
-            <div class="space-y-1 text-xs font-numeric">
-              <div class="grid grid-cols-3 text-fg-muted mb-2 font-medium">
-                <span>Giá mua</span><span class="text-center">KL</span><span class="text-right">Giá bán</span>
-              </div>
-              @for (level of orderBook; track level.bidPrice) {
-                <div class="grid grid-cols-3">
-                  <span class="text-up">{{ level.bidPrice | number:'1.1-2' }}</span>
-                  <span class="text-center text-fg-muted">{{ level.bidVol | number }}</span>
-                  <span class="text-right text-down">{{ level.askPrice | number:'1.1-2' }}</span>
-                </div>
-              }
-              <div class="border-t border-border my-2"></div>
-              <div class="flex justify-between text-fg-muted">
-                <span>Tổng mua: <span class="text-up font-medium">{{ totalBid | number }}</span></span>
-                <span>Tổng bán: <span class="text-down font-medium">{{ totalAsk | number }}</span></span>
-              </div>
-            </div>
-          </app-card>
-
-          <!-- Key stats -->
-          <app-card title="Thông tin giao dịch" variant="default">
-            <div class="space-y-2 text-small">
-              @for (stat of keyStats(); track stat.label) {
-                <div class="flex items-center justify-between py-1 border-b border-border/50 last:border-0">
-                  <span class="text-fg-muted">{{ stat.label }}</span>
-                  <span class="font-numeric font-medium" [class]="stat.color || 'text-fg'">{{ stat.value }}</span>
-                </div>
-              }
-            </div>
-          </app-card>
-
-          <!-- News panel -->
-          <app-card title="📰 Tin tức & Sentiment" variant="default" [hasHeaderAction]="true">
-            <ng-container slot="header-action">
-              @if (sentimentSummary()) {
-                <div class="flex items-center gap-1.5 text-xs">
-                  <span class="text-up">{{ sentimentSummary()!.bullishPct }}%📈</span>
-                  <span class="text-fg-muted">·</span>
-                  <span class="text-down">{{ sentimentSummary()!.bearishPct }}%📉</span>
-                </div>
-              }
-            </ng-container>
-            <div class="mt-1">
-              @if (loadingNews()) {
-                <p class="text-xs text-fg-muted py-4 text-center">Đang tải tin tức…</p>
-              } @else if (news().length === 0) {
-                <p class="text-xs text-fg-muted py-4 text-center">Chưa có tin tức cho {{ symbol() }}.</p>
-              } @else {
-                @for (art of news(); track art.articleId) {
-                  <a [href]="art.url" target="_blank" rel="noopener" class="art-row flex items-start gap-2 no-underline">
-                    <span [class]="'sent-dot mt-1.5 ' + (art.sentiment ?? 'neutral')"></span>
-                    <span class="art-title">{{ art.title }}</span>
-                  </a>
-                }
-              }
-            </div>
-          </app-card>
-        </div>
-      </div>
-
-      <!-- Comments Section -->
-      <section>
-        <h2 class="text-base font-bold text-fg mb-4">💬 Thảo luận — {{ symbol() }}</h2>
-
-        <!-- Post comment -->
-        @if (authSvc.user()) {
-          <div class="flex gap-3 mb-4">
-            <div class="w-9 h-9 rounded-full bg-up/20 flex items-center justify-center shrink-0">
-              <app-icon name="user" size="sm" class="text-up" />
-            </div>
-            <div class="flex-1 flex gap-2">
-              <textarea
-                class="flex-1 min-h-[60px] px-3 py-2 text-small bg-surface-2 border border-border rounded-xl text-fg resize-none focus:outline-none focus:border-up"
-                placeholder="Nhận định của bạn về {{ symbol() }}…"
-                [(ngModel)]="commentDraft"
-                (keydown.ctrl.enter)="submitComment()"
-              ></textarea>
-              <app-btn variant="primary" size="sm" label="Gửi" [loading]="postingComment()" (clicked)="submitComment()" />
-            </div>
-          </div>
-        } @else {
-          <p class="text-xs text-fg-muted mb-4">Đăng nhập để tham gia thảo luận.</p>
-        }
-
-        <!-- Comment list -->
-        @if (loadingComments()) {
-          <p class="text-xs text-fg-muted text-center py-4">Đang tải bình luận…</p>
-        } @else if (comments().length === 0) {
-          <p class="text-xs text-fg-muted text-center py-6">Chưa có bình luận nào. Hãy là người đầu tiên! 🚀</p>
-        } @else {
-          @for (c of comments(); track c.commentId) {
-            <div class="comment-item flex items-start gap-3">
-              <div class="w-8 h-8 rounded-full bg-surface-2 border border-border flex items-center justify-center text-sm font-bold text-fg-muted shrink-0">
-                {{ c.username.charAt(0).toUpperCase() }}
-              </div>
-              <div class="flex-1 min-w-0">
-                <div class="flex items-center gap-2 mb-0.5">
-                  <span class="text-small font-semibold text-fg">{{ c.username }}</span>
-                  <span class="text-xs text-fg-muted">{{ c.createdAt | date:'dd/MM HH:mm' }}</span>
-                </div>
-                <p class="text-small text-fg">{{ c.content }}</p>
-              </div>
-              @if (c.userId === authSvc.user()?.userId) {
-                <button class="text-fg-muted hover:text-down transition-colors p-1" (click)="deleteComment(c.commentId)" title="Xóa">
-                  <app-icon name="x" size="sm" />
-                </button>
-              }
-            </div>
-          }
-        }
-      </section>
-    </div>
-  `,
+  templateUrl: './stock-detail.component.html',
+  styleUrls: ['./stock-detail.component.scss'],
 })
 export class StockDetailComponent implements OnInit {
   public chartService = inject(ChartService);
-  public marketData = inject(MarketDataService);
-  private newsSvc = inject(NewsService);
-  public authSvc = inject(AuthService);
+  public marketData  = inject(MarketDataService);
+  private newsSvc    = inject(NewsService);
+  public authSvc     = inject(AuthService);
+  private toast      = inject(ToastService);
+  private alertSvc   = inject(AlertService);
+  private orderSvc   = inject(OrderService);
 
   readonly symbol = input('');
 
-  readonly loadingChart = signal(true);
-  readonly loadingNews = signal(true);
+  // ── Loading flags ──────────────────────────────────────────────────────────
+  readonly loadingChart    = signal(true);
+  readonly loadingNews     = signal(true);
   readonly loadingComments = signal(false);
-  readonly postingComment = signal(false);
-  readonly chartCandles = signal<any[]>([]);
-  readonly news = signal<NewsArticle[]>([]);
+  readonly postingComment  = signal(false);
+  readonly placingOrder    = signal(false);
+
+  // ── Data signals ───────────────────────────────────────────────────────────
+  readonly chartCandles    = signal<any[]>([]);
+  readonly news            = signal<NewsArticle[]>([]);
   readonly sentimentSummary = signal<SentimentSummary | null>(null);
-  readonly comments = signal<NewsComment[]>([]);
+  readonly comments        = signal<NewsComment[]>([]);
+  readonly orderBook       = signal<OrderBookLevel[]>([]);
+
+  // ── Order panel ────────────────────────────────────────────────────────────
+  readonly orderPanelOpen = signal(false);
+  readonly orderSide      = signal<'BUY' | 'SELL'>('BUY');
+  orderType  = 'LIMIT';
+  orderPrice = 0;
+  orderQty   = 100;
 
   commentDraft = '';
 
+  // ── Derived ────────────────────────────────────────────────────────────────
   readonly stockResult = computed(() =>
     this.marketData.stocks().find(s => s.symbol === this.symbol())
   );
 
-  readonly orderBook = [
-    { bidPrice: 65.8, bidVol: 48_200, askPrice: 65.9 },
-    { bidPrice: 65.7, bidVol: 72_100, askPrice: 66.0 },
-    { bidPrice: 65.6, bidVol: 35_400, askPrice: 66.1 },
-  ];
-  readonly totalBid = 155_700;
-  readonly totalAsk = 198_400;
+  readonly totalBid = computed(() =>
+    this.orderBook().reduce((sum, l) => sum + l.bidVol, 0)
+  );
+
+  readonly totalAsk = computed(() =>
+    this.orderBook().reduce((sum, l) => sum + l.bidVol, 0)
+  );
 
   readonly keyStats = computed(() => {
     const s = this.stockResult();
     if (!s) return [];
     return [
-      { label: 'Mở cửa', value: s.refPrice.toFixed(2), color: '' },
-      { label: 'Cao nhất', value: s.ceilPrice.toFixed(2), color: 'text-up' },
-      { label: 'Thấp nhất', value: s.floorPrice.toFixed(2), color: 'text-down' },
-      { label: 'P/E', value: '18.5x', color: '' },
-      { label: 'EPS', value: '3,562 đ', color: '' },
-      { label: 'KLCP', value: (s.volume / 1_000_000).toFixed(2) + ' triệu CP', color: '' },
-      { label: 'Room NN', value: '7.28%', color: 'text-reference' },
+      { label: 'Mở cửa',    value: s.refPrice.toFixed(2),                         color: '' },
+      { label: 'Cao nhất',  value: s.ceilPrice.toFixed(2),                        color: 'text-up' },
+      { label: 'Thấp nhất', value: s.floorPrice.toFixed(2),                       color: 'text-down' },
+      { label: 'KLCP',      value: (s.volume / 1_000_000).toFixed(2) + ' triệu CP', color: '' },
     ];
   });
 
   constructor() {
-    // React when symbol route param changes
     effect(() => {
       const sym = this.symbol();
       if (sym) {
@@ -270,7 +112,10 @@ export class StockDetailComponent implements OnInit {
     if (sym) {
       this.chartService.getCandles(sym).subscribe(data => {
         const formatted = data
-          .map(c => ({ time: new Date(c.time).getTime() / 1000, open: c.open, high: c.high, low: c.low, close: c.close, volume: c.volume }))
+          .map(c => ({
+            time: new Date(c.time).getTime() / 1000,
+            open: c.open, high: c.high, low: c.low, close: c.close, volume: c.volume,
+          }))
           .sort((a, b) => a.time - b.time);
         this.chartCandles.set(formatted);
         this.loadingChart.set(false);
@@ -278,6 +123,65 @@ export class StockDetailComponent implements OnInit {
     }
   }
 
+  // ── Order panel ────────────────────────────────────────────────────────────
+  openOrderPanel(side: 'BUY' | 'SELL'): void {
+    this.orderSide.set(side);
+    this.orderPrice = this.stockResult()?.price ?? 0;
+    this.orderQty   = 100;
+    this.orderType  = 'LIMIT';
+    this.orderPanelOpen.set(true);
+  }
+
+  closeOrderPanel(): void {
+    this.orderPanelOpen.set(false);
+  }
+
+  submitOrder(): void {
+    if (this.orderQty <= 0) {
+      this.toast.warning('Vui lòng nhập khối lượng hợp lệ.');
+      return;
+    }
+    if (this.orderType === 'LIMIT' && this.orderPrice <= 0) {
+      this.toast.warning('Vui lòng nhập giá hợp lệ.');
+      return;
+    }
+
+    this.placingOrder.set(true);
+    this.orderSvc.placeOrder({
+      symbol:    this.symbol(),
+      side:      this.orderSide(),
+      orderType: this.orderType as 'MARKET' | 'LIMIT',
+      quantity:  this.orderQty,
+      price:     this.orderType === 'MARKET' ? (this.stockResult()?.price ?? 0) : this.orderPrice,
+    }).subscribe({
+      next: (res) => {
+        this.placingOrder.set(false);
+        this.closeOrderPanel();
+        const side = res.side === 'BUY' ? 'MUA' : 'BÁN';
+        this.toast.success(`Đặt lệnh ${side} ${res.requestQty} CP ${res.symbol} thành công!`);
+      },
+      error: () => {
+        this.placingOrder.set(false);
+      },
+    });
+  }
+
+  // ── Alert ──────────────────────────────────────────────────────────────────
+  createAlert(): void {
+    const price = this.stockResult()?.price;
+    if (!price) return;
+    this.alertSvc.createAlert({
+      symbol:         this.symbol(),
+      alertType:      'price',
+      condition:      'gt',
+      thresholdValue: Math.round(price * 1.05 * 10) / 10,
+      notifyOnce:     false,
+    }).subscribe({
+      next: () => this.toast.success(`Đã tạo cảnh báo giá cho ${this.symbol()}.`),
+    });
+  }
+
+  // ── News & comments ────────────────────────────────────────────────────────
   private loadNews(symbol: string): void {
     this.loadingNews.set(true);
     this.newsSvc.getNews(symbol, 6).subscribe({
@@ -286,14 +190,14 @@ export class StockDetailComponent implements OnInit {
     });
     this.newsSvc.getSentimentSummary(symbol).subscribe({
       next: (s) => this.sentimentSummary.set(s),
-      error: () => { },
+      error: () => {},
     });
   }
 
   private loadComments(symbol: string): void {
     this.newsSvc.getComments(symbol).subscribe({
       next: (data) => this.comments.set(data),
-      error: () => { },
+      error: () => {},
     });
   }
 
@@ -306,20 +210,30 @@ export class StockDetailComponent implements OnInit {
         this.comments.update(list => [c, ...list]);
         this.commentDraft = '';
         this.postingComment.set(false);
+        this.toast.success('Bình luận đã được đăng!');
       },
-      error: () => this.postingComment.set(false),
+      error: (err) => {
+        this.postingComment.set(false);
+        this.toast.error('Không thể đăng bình luận: ' + (err?.error?.message || 'Vui lòng thử lại.'));
+      },
     });
   }
 
   deleteComment(id: number): void {
     this.newsSvc.deleteComment(id).subscribe({
-      next: () => this.comments.update(list => list.filter(c => c.commentId !== id)),
-      error: () => { },
+      next: () => {
+        this.comments.update(list => list.filter(c => c.commentId !== id));
+        this.toast.info('Đã xóa bình luận.');
+      },
+      error: () => this.toast.error('Không thể xóa bình luận. Vui lòng thử lại.'),
     });
   }
 
-  signalLabel(s: string): string { return { BULLISH: '🟢 Tích cực', BEARISH: '🔴 Tiêu cực', NEUTRAL: '⚪ Trung lập' }[s] ?? s; }
+  // ── Helpers ────────────────────────────────────────────────────────────────
+  signalLabel(s: string): string {
+    return ({ BULLISH: '🟢 Tích cực', BEARISH: '🔴 Tiêu cực', NEUTRAL: '⚪ Trung lập' } as Record<string, string>)[s] ?? s;
+  }
   signalClass(s: string): string {
-    return { BULLISH: 'bg-up/10 text-up', BEARISH: 'bg-down/10 text-down', NEUTRAL: 'bg-surface-2 text-fg-muted' }[s] ?? '';
+    return ({ BULLISH: 'bg-up/10 text-up', BEARISH: 'bg-down/10 text-down', NEUTRAL: 'bg-surface-2 text-fg-muted' } as Record<string, string>)[s] ?? '';
   }
 }

@@ -14,6 +14,7 @@ import { IconComponent } from '../../shared/atoms/icon/icon.component';
 import { WalletService } from '../../core/services/wallet.service';
 import { PaymentService } from '../../core/services/payment.service';
 import { TransactionService } from '../../core/services/transaction.service';
+import { ToastService } from '../../core/services/toast.service';
 import { inject, OnInit } from '@angular/core';
 
 type TransactionType = 'deposit' | 'withdraw';
@@ -171,6 +172,7 @@ export class DepositComponent implements OnInit {
   private readonly walletService = inject(WalletService);
   private readonly paymentService = inject(PaymentService);
   private readonly transactionService = inject(TransactionService);
+  private readonly toast = inject(ToastService);
 
   readonly mode = signal<TransactionType>('deposit');
   readonly amount = signal<string | number>('');
@@ -274,13 +276,13 @@ export class DepositComponent implements OnInit {
           if (res.checkoutUrl) {
             window.location.href = res.checkoutUrl;
           } else {
-            alert('Nạp tiền thành công');
+            this.toast.success('Nạp tiền thành công!');
             this.loadData();
           }
         },
         error: (err) => {
           this.isProcessing.set(false);
-          alert('Lỗi nạp tiền: ' + (err?.error?.message || err.message));
+          this.toast.error('Lỗi nạp tiền: ' + (err?.error?.message || err.message || 'Vui lòng thử lại.'));
         }
       });
     } else {
@@ -288,12 +290,12 @@ export class DepositComponent implements OnInit {
         next: () => {
           this.isProcessing.set(false);
           this.amount.set('');
-          alert('Rút tiền thành công!');
+          this.toast.success('Yêu cầu rút tiền đã được gửi!');
           this.loadData();
         },
         error: (err) => {
           this.isProcessing.set(false);
-          alert('Lỗi rút tiền: ' + (err?.error?.message || err.message));
+          this.toast.error('Lỗi rút tiền: ' + (err?.error?.message || err.message || 'Vui lòng thử lại.'));
         }
       });
     }

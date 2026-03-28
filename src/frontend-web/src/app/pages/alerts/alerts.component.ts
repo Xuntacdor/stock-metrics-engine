@@ -1,5 +1,5 @@
 import {
-  Component, signal,
+  Component, signal, inject, OnInit, OnDestroy,
   ChangeDetectionStrategy,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
@@ -11,17 +11,7 @@ import { ButtonComponent } from '../../shared/atoms/button/button.component';
 import { InputComponent } from '../../shared/atoms/input/input.component';
 import { LabelComponent } from '../../shared/atoms/label/label.component';
 import { IconComponent } from '../../shared/atoms/icon/icon.component';
-
-interface AlertRule {
-  id: number;
-  symbol: string;
-  type: 'price' | 'rsi' | 'volume' | 'news';
-  condition: string;
-  value: number;
-  active: boolean;
-  triggered: boolean;
-  createdAt: string;
-}
+import { AlertService, type AlertRule, type AlertTriggeredNotification } from '../../core/services/alert.service';
 
 @Component({
   selector: 'app-alerts',
@@ -42,6 +32,14 @@ interface AlertRule {
       <div role="status" aria-live="polite" aria-atomic="true" class="sr-only">
         {{ latestAlert() }}
       </div>
+
+      <!-- Toast notification when alert fires -->
+      @if (toastMessage()) {
+        <div class="fixed top-4 right-4 z-50 flex items-center gap-3 px-4 py-3 rounded-xl border border-down/40 bg-down/10 shadow-lg text-down text-small font-medium animate-fade-in">
+          <app-icon name="bell" size="sm" />
+          {{ toastMessage() }}
+        </div>
+      }
 
       <div class="grid grid-cols-1 xl:grid-cols-3 gap-6">
 
@@ -77,10 +75,12 @@ interface AlertRule {
               <div class="grid grid-cols-2 gap-3">
                 <div>
                   <label class="text-small font-medium text-fg block mb-1.5">Điều kiện</label>
-                  <select class="w-full h-10 px-3 text-body bg-surface-2 border border-border rounded-md text-fg focus:outline-none focus:border-up">
-                    <option>&gt; Lớn hơn</option>
-                    <option>&lt; Nhỏ hơn</option>
-                    <option>= Bằng</option>
+                  <select class="w-full h-10 px-3 text-body bg-surface-2 border border-border rounded-md text-fg focus:outline-none focus:border-up"
+                    [(ngModel)]="newAlert.condition" [ngModelOptions]="{standalone: true}">
+                    <option value="gt">&gt; Lớn hơn</option>
+                    <option value="gte">&gt;= Lớn hơn hoặc bằng</option>
+                    <option value="lt">&lt; Nhỏ hơn</option>
+                    <option value="lte">&lt;= Nhỏ hơn hoặc bằng</option>
                   </select>
                 </div>
                 <app-form-field label="Giá trị" fieldId="alert-val">
@@ -93,14 +93,16 @@ interface AlertRule {
               <div>
                 <p class="text-small font-medium text-fg mb-2">Tần suất thông báo</p>
                 <div class="space-y-1.5">
-                  @for (f of frequencies; track f.id) {
-                    <label class="flex items-center gap-2 cursor-pointer text-small">
-                      <input type="radio" name="freq" [value]="f.id"
-                        [checked]="newAlert.frequency === f.id"
-                        (change)="newAlert.frequency = f.id" class="accent-up" />
-                      <span>{{ f.label }}</span>
-                    </label>
-                  }
+                  <label class="flex items-center gap-2 cursor-pointer text-small">
+                    <input type="radio" name="freq" value="once"
+                      [checked]="newAlert.notifyOnce" (change)="newAlert.notifyOnce = true" class="accent-up" />
+                    <span>Một lần (tự động tắt sau khi kích hoạt)</span>
+                  </label>
+                  <label class="flex items-center gap-2 cursor-pointer text-small">
+                    <input type="radio" name="freq" value="always"
+                      [checked]="!newAlert.notifyOnce" (change)="newAlert.notifyOnce = false" class="accent-up" />
+                    <span>Mỗi lần điều kiện thỏa mãn</span>
+                  </label>
                 </div>
               </div>
 
@@ -115,35 +117,42 @@ interface AlertRule {
 
           <!-- Tabs -->
           <app-tab-nav
-            [tabs]="alertTabs"
+            [tabs]="alertTabs()"
             [activeId]="activeTab()"
             variant="underline"
             (activeIdChange)="activeTab.set($event)"
           />
 
+          <!-- Loading -->
+          @if (isLoading()) {
+            <div class="flex items-center justify-center py-12 text-fg-muted">
+              <span class="text-small">Đang tải...</span>
+            </div>
+          }
+
           <!-- Active alerts -->
-          @if (activeTab() === 'active') {
+          @if (!isLoading() && activeTab() === 'active') {
             <div class="space-y-3">
-              @for (alert of activeAlerts(); track alert.id) {
+              @for (alert of activeAlerts(); track alert.alertId) {
                 <div [class]="'rounded-xl border p-4 transition-all ' +
-                  (alert.triggered ? 'border-down/40 bg-down/5' : 'border-border hover:border-border-hover')"
+                  (alert.isTriggered ? 'border-down/40 bg-down/5' : 'border-border hover:border-border-hover')"
                 >
                   <div class="flex items-start justify-between gap-4">
                     <div class="flex items-start gap-3">
                       <!-- Type icon -->
-                      <div [class]="'p-2 rounded-lg shrink-0 ' + alertIconBg(alert.type)">
-                        <app-icon [name]="alertIcon(alert.type)" size="sm" [class]="alertIconColor(alert.type)" />
+                      <div [class]="'p-2 rounded-lg shrink-0 ' + alertIconBg(alert.alertType)">
+                        <app-icon [name]="alertIcon(alert.alertType)" size="sm" [class]="alertIconColor(alert.alertType)" />
                       </div>
                       <!-- Info -->
                       <div>
                         <div class="flex items-center gap-2 mb-0.5">
                           <span class="font-bold text-fg">{{ alert.symbol }}</span>
-                          <app-badge [variant]="alert.triggered ? 'down' : 'neutral'" size="sm" [dot]="alert.triggered">
-                            {{ alert.triggered ? 'Đã kích hoạt' : 'Đang chờ' }}
+                          <app-badge [variant]="alert.isTriggered ? 'down' : 'neutral'" size="sm" [dot]="alert.isTriggered">
+                            {{ alert.isTriggered ? 'Đã kích hoạt' : 'Đang chờ' }}
                           </app-badge>
                         </div>
-                        <p class="text-small text-fg-muted">{{ alert.condition }} {{ alert.value }}</p>
-                        <p class="text-xs text-fg-muted mt-0.5">{{ alert.createdAt }}</p>
+                        <p class="text-small text-fg-muted">{{ conditionLabel(alert.condition) }} {{ alert.thresholdValue }}</p>
+                        <p class="text-xs text-fg-muted mt-0.5">{{ alert.createdAt | date:'dd/MM HH:mm' }}</p>
                       </div>
                     </div>
 
@@ -152,19 +161,19 @@ interface AlertRule {
                       <!-- Toggle -->
                       <button
                         [class]="'w-10 h-6 rounded-full transition-colors relative ' +
-                          (alert.active ? 'bg-up' : 'bg-border')"
+                          (alert.isActive ? 'bg-up' : 'bg-border')"
                         (click)="toggleAlert(alert)"
-                        [attr.aria-label]="alert.active ? 'Tắt cảnh báo' : 'Bật cảnh báo'"
-                        [attr.aria-checked]="alert.active"
+                        [attr.aria-label]="alert.isActive ? 'Tắt cảnh báo' : 'Bật cảnh báo'"
+                        [attr.aria-checked]="alert.isActive"
                         role="switch"
                       >
                         <span [class]="'absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-all ' +
-                          (alert.active ? 'left-5' : 'left-1')"></span>
+                          (alert.isActive ? 'left-5' : 'left-1')"></span>
                       </button>
                       <button
                         class="p-1.5 rounded-md text-fg-muted hover:text-down hover:bg-down/10 transition-colors"
                         aria-label="Xóa cảnh báo"
-                        (click)="deleteAlert(alert.id)"
+                        (click)="deleteAlert(alert.alertId)"
                       >
                         <app-icon name="x" size="sm" />
                       </button>
@@ -182,20 +191,21 @@ interface AlertRule {
             </div>
           }
 
-          <!-- History -->
-          @if (activeTab() === 'history') {
+          <!-- Triggered history -->
+          @if (!isLoading() && activeTab() === 'history') {
             <div class="space-y-2">
-              @for (h of alertHistory; track h.id) {
+              @for (h of triggeredAlerts(); track h.alertId) {
                 <div class="flex items-center gap-4 p-4 rounded-xl border border-border hover:bg-surface-2 transition-colors">
-                  <div [class]="'w-2 h-2 rounded-full shrink-0 ' + (h.triggered ? 'bg-down' : 'bg-fg-muted')"></div>
+                  <div class="w-2 h-2 rounded-full shrink-0 bg-down"></div>
                   <div class="flex-1 min-w-0">
-                    <p class="text-small text-fg font-medium">{{ h.symbol }} – {{ h.condition }}</p>
-                    <p class="text-xs text-fg-muted">{{ h.time }}</p>
+                    <p class="text-small text-fg font-medium">{{ h.symbol }} – {{ conditionLabel(h.condition) }} {{ h.thresholdValue }}</p>
+                    <p class="text-xs text-fg-muted">{{ h.triggeredAt | date:'dd/MM/yy HH:mm' }}</p>
                   </div>
-                  <app-badge [variant]="h.triggered ? 'down' : 'neutral'" size="sm">
-                    {{ h.triggered ? 'Kích hoạt' : 'Hết hạn' }}
-                  </app-badge>
+                  <app-badge variant="down" size="sm">Kích hoạt</app-badge>
                 </div>
+              }
+              @if (triggeredAlerts().length === 0) {
+                <p class="text-center py-8 text-small text-fg-muted">Chưa có cảnh báo nào được kích hoạt.</p>
               }
             </div>
           }
@@ -204,44 +214,108 @@ interface AlertRule {
     </div>
   `,
 })
-export class AlertsComponent {
+export class AlertsComponent implements OnInit, OnDestroy {
+  private readonly alertService = inject(AlertService);
+
   readonly activeTab = signal('active');
-  readonly isSaving = signal(false);
+  readonly isSaving  = signal(false);
+  readonly isLoading = signal(false);
   readonly latestAlert = signal('');
+  readonly toastMessage = signal('');
 
-  newAlert = { symbol: '' as string | number, type: 'price' as 'price' | 'rsi' | 'volume' | 'news', value: '' as string | number, frequency: 'realtime' };
+  private readonly _alerts = signal<AlertRule[]>([]);
 
-  readonly alertTabs: TabItem[] = [
-    { id: 'active', label: 'Đang hoạt động', badge: 3 },
-    { id: 'history', label: 'Lịch sử' },
-  ];
+  readonly activeAlerts   = () => this._alerts().filter(a => a.isActive && !a.isTriggered);
+  readonly triggeredAlerts = () => this._alerts().filter(a => a.isTriggered);
+  readonly alertTabs = () => [
+    { id: 'active',  label: 'Đang hoạt động', badge: this.activeAlerts().length || undefined },
+    { id: 'history', label: 'Đã kích hoạt',   badge: this.triggeredAlerts().length || undefined },
+  ] satisfies TabItem[];
+
+  newAlert = {
+    symbol: '' as string | number,
+    type: 'price' as 'price' | 'volume' | 'rsi' | 'news',
+    condition: 'gt' as 'gt' | 'gte' | 'lt' | 'lte',
+    value: '' as string | number,
+    notifyOnce: true,
+  };
 
   readonly alertTypes = [
-    { id: 'price', label: 'Giá', icon: 'trending-up' },
-    { id: 'rsi', label: 'RSI', icon: 'bar-chart-2' },
+    { id: 'price',  label: 'Giá',       icon: 'trending-up' },
+    { id: 'rsi',    label: 'RSI',        icon: 'bar-chart-2' },
     { id: 'volume', label: 'Khối lượng', icon: 'bar-chart-2' },
-    { id: 'news', label: 'Tin tức', icon: 'bell' },
+    { id: 'news',   label: 'Tin tức',    icon: 'bell' },
   ];
 
-  readonly frequencies = [
-    { id: 'realtime', label: 'Ngay lập tức (Real-time)' },
-    { id: '1min', label: 'Mỗi 1 phút' },
-    { id: 'daily', label: 'Tổng hợp cuối ngày' },
-  ];
+  ngOnInit(): void {
+    this.loadAlerts();
 
-  private _alerts = signal<AlertRule[]>([
-    { id: 1, symbol: 'VNM', type: 'price', condition: 'Giá > ', value: 67.0, active: true, triggered: false, createdAt: '06/03 09:15' },
-    { id: 2, symbol: 'FPT', type: 'rsi', condition: 'RSI < ', value: 30, active: true, triggered: true, createdAt: '06/03 08:30' },
-    { id: 3, symbol: 'HPG', type: 'price', condition: 'Giá < ', value: 26.0, active: false, triggered: false, createdAt: '05/03 14:22' },
-  ]);
+    // Subscribe to SignalR push notifications for this user's alerts
+    this.alertService.onAlertTriggered((n: AlertTriggeredNotification) => {
+      this.showToast(`[${n.symbol}] ${n.alertType} ${this.conditionLabel(n.condition)} ${n.thresholdValue} — giá trị hiện tại: ${n.currentValue}`);
+      this.latestAlert.set(`Cảnh báo kích hoạt: ${n.symbol}`);
+      // Mark the alert as triggered in the local list
+      this._alerts.update(list =>
+        list.map(a => a.alertId === n.alertId ? { ...a, isTriggered: true, triggeredAt: n.triggeredAt } : a)
+      );
+    });
+  }
 
-  readonly activeAlerts = () => this._alerts();
+  ngOnDestroy(): void {
+    this.alertService.offAlertTriggered();
+  }
 
-  readonly alertHistory = [
-    { id: 1, symbol: 'VNM', condition: 'Giá > 65.5', time: 'Hôm nay 10:42', triggered: true },
-    { id: 2, symbol: 'FPT', condition: 'RSI < 30', time: 'Hôm nay 09:18', triggered: true },
-    { id: 3, symbol: 'TCB', condition: 'Giá > 25.0', time: 'Hôm qua 15:30', triggered: false },
-  ];
+  private loadAlerts(): void {
+    this.isLoading.set(true);
+    this.alertService.getMyAlerts().subscribe({
+      next: alerts => { this._alerts.set(alerts); this.isLoading.set(false); },
+      error: () => this.isLoading.set(false),
+    });
+  }
+
+  saveAlert(): void {
+    if (!this.newAlert.symbol || !this.newAlert.value) return;
+    this.isSaving.set(true);
+
+    this.alertService.createAlert({
+      symbol:         String(this.newAlert.symbol).toUpperCase(),
+      alertType:      this.newAlert.type,
+      condition:      this.newAlert.condition,
+      thresholdValue: Number(this.newAlert.value),
+      notifyOnce:     this.newAlert.notifyOnce,
+    }).subscribe({
+      next: alert => {
+        this._alerts.update(list => [alert, ...list]);
+        this.isSaving.set(false);
+        this.newAlert = { symbol: '', type: 'price', condition: 'gt', value: '', notifyOnce: true };
+        this.latestAlert.set(`Cảnh báo mới đã được tạo cho ${alert.symbol}`);
+      },
+      error: () => this.isSaving.set(false),
+    });
+  }
+
+  toggleAlert(alert: AlertRule): void {
+    this.alertService.toggleAlert(alert.alertId, !alert.isActive).subscribe(updated => {
+      this._alerts.update(list => list.map(a => a.alertId === updated.alertId ? updated : a));
+    });
+  }
+
+  deleteAlert(alertId: number): void {
+    this.alertService.deleteAlert(alertId).subscribe(() => {
+      this._alerts.update(list => list.filter(a => a.alertId !== alertId));
+    });
+  }
+
+  setAlertType(id: string): void {
+    const valid = ['price', 'volume', 'rsi', 'news'] as const;
+    if (valid.includes(id as typeof valid[number])) {
+      this.newAlert.type = id as typeof valid[number];
+    }
+  }
+
+  conditionLabel(condition: string): string {
+    return { gt: '>', gte: '>=', lt: '<', lte: '<=' }[condition] ?? condition;
+  }
 
   alertIcon(type: string): string {
     return { price: 'trending-up', rsi: 'bar-chart-2', volume: 'bar-chart-2', news: 'bell' }[type] ?? 'bell';
@@ -253,35 +327,8 @@ export class AlertsComponent {
     return { price: 'text-up', rsi: 'text-reference', volume: 'text-limit-up', news: 'text-sky-400' }[type] ?? 'text-fg-muted';
   }
 
-  toggleAlert(alert: AlertRule): void {
-    this._alerts.update(list => list.map(a => a.id === alert.id ? { ...a, active: !a.active } : a));
-  }
-
-  deleteAlert(id: number): void {
-    this._alerts.update(list => list.filter(a => a.id !== id));
-  }
-
-  saveAlert(): void {
-    if (!this.newAlert.symbol) return;
-    this.isSaving.set(true);
-    setTimeout(() => {
-      this._alerts.update(list => [...list, {
-        id: Date.now(), symbol: this.newAlert.symbol as string,
-        type: this.newAlert.type, condition: 'Giá > ',
-        value: Number(this.newAlert.value) || 0,
-        active: true, triggered: false,
-        createdAt: new Date().toLocaleDateString('vi'),
-      }]);
-      this.isSaving.set(false);
-      this.newAlert = { symbol: '', type: 'price', value: '', frequency: 'realtime' };
-      this.latestAlert.set(`Cảnh báo mới đã được tạo`);
-    }, 800);
-  }
-
-  setAlertType(id: string): void {
-    const valid: AlertRule['type'][] = ['price', 'rsi', 'volume', 'news'];
-    if (valid.includes(id as AlertRule['type'])) {
-      this.newAlert.type = id as AlertRule['type'];
-    }
+  private showToast(msg: string): void {
+    this.toastMessage.set(msg);
+    setTimeout(() => this.toastMessage.set(''), 5000);
   }
 }
