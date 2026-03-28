@@ -15,15 +15,18 @@ public class RiskController : ControllerBase
     private readonly IMarginRiskService _riskService;
     private readonly IRiskAlertRepository _alertRepo;
     private readonly IWalletRepository _walletRepo;
+    private readonly IMarginRatioRepository _marginRatioRepo;
 
     public RiskController(
         IMarginRiskService riskService,
         IRiskAlertRepository alertRepo,
-        IWalletRepository walletRepo)
+        IWalletRepository walletRepo,
+        IMarginRatioRepository marginRatioRepo)
     {
         _riskService = riskService;
         _alertRepo = alertRepo;
         _walletRepo = walletRepo;
+        _marginRatioRepo = marginRatioRepo;
     }
 
     [HttpGet("buying-power")]
@@ -38,7 +41,7 @@ public class RiskController : ControllerBase
             return Ok(new BuyingPowerResponse(0m, 0m, 0m));
 
         var buyingPower = await _riskService.GetBuyingPowerAsync(userId);
-        var availableCash = wallet.AvailableBalance ?? 0m;
+        var availableCash = wallet.AvailableBalance;
         var marginValue = buyingPower - availableCash;
 
         return Ok(new BuyingPowerResponse(buyingPower, availableCash, marginValue));
@@ -56,7 +59,7 @@ public class RiskController : ControllerBase
         if (wallet == null)
             return Ok(new RttResponse(999m, 0m, false, "NO_LOAN"));
 
-        var loanAmount = wallet.LoanAmount ?? 0m;
+        var loanAmount = wallet.LoanAmount;
         var rtt = await _riskService.CalculateRttAsync(userId);
 
         var status = rtt == decimal.MaxValue
@@ -106,6 +109,15 @@ public class RiskController : ControllerBase
 
         var rtt = await _riskService.CalculateRttAsync(userId);
         return Ok(new { LoanAmount = request.LoanAmount, Rtt = rtt });
+    }
+
+    [HttpGet("margin-ratios")]
+    [AllowAnonymous]
+    public async Task<IActionResult> GetMarginRatios()
+    {
+        var ratios = await _marginRatioRepo.GetAllActiveAsync();
+        var response = ratios.Select(r => new MarginRatioResponse(r.Symbol, r.InitialRate, r.MaintenanceRate));
+        return Ok(response);
     }
 
     private string? GetUserId() =>

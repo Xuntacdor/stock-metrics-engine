@@ -1,3 +1,4 @@
+using backend_api.Api.Constants;
 using backend_api.Api.Data;
 using backend_api.Api.DTOs;
 using backend_api.Api.Models;
@@ -43,7 +44,7 @@ public class MarginRiskService : IMarginRiskService
 
         decimal marginValue = 0m;
 
-        foreach (var pos in portfolios.Where(p => (p.TotalQuantity ?? 0) > 0))
+        foreach (var pos in portfolios.Where(p => p.TotalQuantity > 0))
         {
             var latestCandle = await _context.Candles
                 .Where(c => c.Symbol == pos.Symbol)
@@ -55,39 +56,36 @@ public class MarginRiskService : IMarginRiskService
             var ratio = await _marginRepo.GetActiveBySymbolAsync(pos.Symbol);
             var initialRate = ratio?.InitialRate ?? 0m;
 
-            marginValue += marketPrice * (pos.TotalQuantity ?? 0) * (initialRate / 100m);
+            marginValue += marketPrice * pos.TotalQuantity * (initialRate / 100m);
         }
 
-        return (wallet.AvailableBalance ?? 0m) + marginValue;
+        return wallet.AvailableBalance + marginValue;
     }
 
-    
     public async Task<decimal> CalculateRttAsync(string userId)
     {
         var wallet = await _walletRepo.GetByUserIdAsync(userId)
             ?? throw new InvalidOperationException("Wallet not found.");
 
-        var loanAmount = wallet.LoanAmount ?? 0m;
-
-        if (loanAmount <= 0m)
+        if (wallet.LoanAmount <= 0m)
             return decimal.MaxValue;
 
-        var totalAssets = wallet.Balance ?? 0m;
+        var totalAssets = wallet.Balance;
         var portfolios = (await _portfolioRepo.GetByUserIdAsync(userId)).ToList();
 
-        foreach (var pos in portfolios.Where(p => (p.TotalQuantity ?? 0) > 0))
+        foreach (var pos in portfolios.Where(p => p.TotalQuantity > 0))
         {
             var latestCandle = await _context.Candles
                 .Where(c => c.Symbol == pos.Symbol)
                 .OrderByDescending(c => c.Timestamp)
                 .FirstOrDefaultAsync();
 
-            var marketPrice = latestCandle?.Close ?? pos.AvgCostPrice ?? 0m;
-            totalAssets += marketPrice * (pos.TotalQuantity ?? 0);
+            var marketPrice = latestCandle?.Close ?? pos.AvgCostPrice;
+            totalAssets += marketPrice * pos.TotalQuantity;
         }
 
-        var netAssets = totalAssets - loanAmount;
-        return netAssets / loanAmount;
+        var netAssets = totalAssets - wallet.LoanAmount;
+        return netAssets / wallet.LoanAmount;
     }
 
     public async Task<bool> ValidatePreTradeAsync(string userId, string symbol, int quantity, decimal price)
@@ -106,7 +104,6 @@ public class MarginRiskService : IMarginRiskService
         return true;
     }
 
- 
     public async Task ExecuteForceSellAsync(string userId)
     {
         _logger.LogWarning("=== FORCE SELL triggered for User {UserId} ===", userId);
@@ -119,7 +116,7 @@ public class MarginRiskService : IMarginRiskService
         }
 
         var positions = (await _portfolioRepo.GetByUserIdAsync(userId))
-            .Where(p => (p.AvailableQuantity ?? 0) > 0)
+            .Where(p => p.AvailableQuantity > 0)
             .ToList();
 
         if (positions.Count == 0)
@@ -138,62 +135,62 @@ public class MarginRiskService : IMarginRiskService
                     .OrderByDescending(c => c.Timestamp)
                     .FirstOrDefaultAsync();
 
-                var sellPrice = latestCandle?.Close ?? pos.AvgCostPrice ?? 0m;
+                var sellPrice = latestCandle?.Close ?? pos.AvgCostPrice;
                 if (sellPrice <= 0m)
                 {
                     _logger.LogWarning("Force Sell: Cannot determine sell price for {Symbol}. Skipping.", pos.Symbol);
                     continue;
                 }
 
-                var qty = pos.AvailableQuantity ?? 0;
+                var qty = pos.AvailableQuantity;
                 var proceeds = sellPrice * qty;
 
                 var orderId = Guid.NewGuid().ToString();
                 var order = new Order
                 {
-                    OrderId   = orderId,
-                    UserId    = userId,
-                    Symbol    = pos.Symbol,
-                    Side      = "SELL",
-                    OrderType = "FORCE_SELL",
-                    RequestQty = qty,
-                    Price     = sellPrice,
-                    MatchedQty = qty,
+                    OrderId         = orderId,
+                    UserId          = userId,
+                    Symbol          = pos.Symbol,
+                    Side            = OrderSide.Sell,
+                    OrderType       = OrderType.ForceSell,
+                    RequestQty      = qty,
+                    Price           = sellPrice,
+                    MatchedQty      = qty,
                     AvgMatchedPrice = sellPrice,
-                    Status    = "FILLED",
-                    CreatedAt = DateTime.UtcNow,
-                    UpdatedAt = DateTime.UtcNow
+                    Status          = OrderStatus.Filled,
+                    CreatedAt       = DateTime.UtcNow,
+                    UpdatedAt       = DateTime.UtcNow
                 };
                 await _orderRepo.AddAsync(order);
                 await _orderRepo.SaveChangesAsync();
 
-                var balanceBefore = wallet.Balance ?? 0m;
+                var balanceBefore = wallet.Balance;
                 wallet.Balance += proceeds;
                 wallet.LastUpdated = DateTime.UtcNow;
                 _walletRepo.Update(wallet);
                 await _walletRepo.SaveChangesAsync();
 
-                pos.TotalQuantity -= qty;
-                pos.LockedQuantity = Math.Max(0, (pos.LockedQuantity ?? 0) - qty);
+                pos.TotalQuantity  -= qty;
+                pos.LockedQuantity  = Math.Max(0, pos.LockedQuantity - qty);
                 if (pos.TotalQuantity <= 0)
                 {
-                    pos.TotalQuantity = 0;
+                    pos.TotalQuantity  = 0;
                     pos.LockedQuantity = 0;
-                    pos.AvgCostPrice = 0;
+                    pos.AvgCostPrice   = 0;
                 }
                 _portfolioRepo.Update(pos);
                 await _portfolioRepo.SaveChangesAsync();
 
                 var tx = new Transaction
                 {
-                    UserId      = userId,
-                    RefId       = orderId,
-                    TransType   = "FORCE_SELL",
-                    Amount      = proceeds,
+                    UserId        = userId,
+                    RefId         = orderId,
+                    TransType     = TransactionType.ForceSell,
+                    Amount        = proceeds,
                     BalanceBefore = balanceBefore,
-                    BalanceAfter  = wallet.Balance ?? 0m,
-                    Description = $"[Force Sell] Bán {qty} CP {pos.Symbol} tại {sellPrice:N0} ₫/CP",
-                    TransTime   = DateTime.UtcNow
+                    BalanceAfter  = wallet.Balance,
+                    Description   = $"[Force Sell] Bán {qty} CP {pos.Symbol} tại {sellPrice:N0} ₫/CP",
+                    TransTime     = DateTime.UtcNow
                 };
                 await _transactionRepo.AddAsync(tx);
                 await _transactionRepo.SaveChangesAsync();

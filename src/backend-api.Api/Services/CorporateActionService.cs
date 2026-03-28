@@ -125,7 +125,7 @@ public class CorporateActionService : ICorporateActionService
             actionId, action.Symbol, action.ActionType, action.Ratio);
 
         var holdings = await _portfolioRepo.GetBySymbolAsync(action.Symbol);
-        var eligibleHoldings = holdings.Where(p => (p.TotalQuantity ?? 0) > 0).ToList();
+        var eligibleHoldings = holdings.Where(p => p.TotalQuantity > 0).ToList();
 
         _logger.LogInformation("Found {Count} eligible holders for {Symbol}", eligibleHoldings.Count, action.Symbol);
 
@@ -160,7 +160,7 @@ public class CorporateActionService : ICorporateActionService
 
     private async Task ProcessHolderAsync(CorporateAction action, Portfolio holding)
     {
-        var quantity = holding.TotalQuantity ?? 0;
+        var quantity = holding.TotalQuantity;
 
         switch (action.ActionType)
         {            
@@ -175,7 +175,7 @@ public class CorporateActionService : ICorporateActionService
                     return;
                 }
 
-                var balanceBefore = wallet.Balance ?? 0;
+                var balanceBefore = wallet.Balance;
                 wallet.Balance = balanceBefore + dividendAmount;
                 wallet.LastUpdated = DateTime.UtcNow;
                 _walletRepo.Update(wallet);
@@ -187,7 +187,7 @@ public class CorporateActionService : ICorporateActionService
                     TransType = "CASH_DIVIDEND",
                     Amount = dividendAmount,
                     BalanceBefore = balanceBefore,
-                    BalanceAfter = wallet.Balance ?? 0,
+                    BalanceAfter = wallet.Balance,
                     Description = $"Cổ tức tiền mặt {action.Symbol}: {action.Ratio:N0} đ/cp × {quantity:N0} cp = {dividendAmount:N0} đ",
                     TransTime = DateTime.UtcNow
                 });
@@ -211,8 +211,8 @@ public class CorporateActionService : ICorporateActionService
                     return;
                 }
 
-                var oldCost = (holding.TotalQuantity ?? 0) * (holding.AvgCostPrice ?? 0);
-                var newTotalQty = (holding.TotalQuantity ?? 0) + bonusShares;
+                var oldCost = holding.TotalQuantity * holding.AvgCostPrice;
+                var newTotalQty = holding.TotalQuantity + bonusShares;
                 holding.TotalQuantity = newTotalQty;
                 holding.AvgCostPrice = newTotalQty > 0 ? oldCost / newTotalQty : 0;
 

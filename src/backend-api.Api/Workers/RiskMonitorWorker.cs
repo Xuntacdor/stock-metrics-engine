@@ -1,3 +1,4 @@
+using backend_api.Api.Constants;
 using backend_api.Api.Data;
 using backend_api.Api.Models;
 using backend_api.Api.Repositories;
@@ -51,7 +52,7 @@ public class RiskMonitorWorker : BackgroundService
         var alertRepo  = scope.ServiceProvider.GetRequiredService<IRiskAlertRepository>();
 
         var usersWithLoan = await context.CashWallets
-            .Where(w => w.LoanAmount != null && w.LoanAmount > 0)
+            .Where(w => w.LoanAmount > 0)
             .Select(w => w.UserId)
             .ToListAsync(stoppingToken);
 
@@ -91,7 +92,7 @@ public class RiskMonitorWorker : BackgroundService
                 await alertRepo.AddAsync(new RiskAlert
                 {
                     UserId    = userId,
-                    AlertType = "FORCE_SELL",
+                    AlertType = RiskAlertType.ForceSell,
                     Rtt       = rtt,
                     Message   = $"Tỷ lệ tài khoản {rtt:P2} xuống dưới ngưỡng {ForceSellThreshold:P0}. Hệ thống đang bán giải chấp tự động.",
                     CreatedAt = DateTime.UtcNow
@@ -108,7 +109,7 @@ public class RiskMonitorWorker : BackgroundService
                 await alertRepo.AddAsync(new RiskAlert
                 {
                     UserId    = userId,
-                    AlertType = "CALL_MARGIN",
+                    AlertType = RiskAlertType.CallMargin,
                     Rtt       = rtt,
                     Message   = $"Tỷ lệ tài khoản {rtt:P2} xuống dưới ngưỡng {CallMarginThreshold:P0}. Vui lòng nộp thêm tiền ký quỹ.",
                     CreatedAt = DateTime.UtcNow

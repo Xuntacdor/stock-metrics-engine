@@ -47,13 +47,13 @@ public class WalletService : IWalletService
         }
         else
         {
-            var balanceBefore = wallet.Balance ?? 0;
+            var balanceBefore = wallet.Balance;
             wallet.Balance = balanceBefore + amount;
             wallet.LastUpdated = DateTime.UtcNow;
             _walletRepo.Update(wallet);
             await _walletRepo.SaveChangesAsync();
 
-            await RecordTransactionAsync(userId, "DEPOSIT", amount, balanceBefore, wallet.Balance ?? 0,
+            await RecordTransactionAsync(userId, "DEPOSIT", amount, balanceBefore, wallet.Balance,
                 $"Deposit: {amount:N0} VNĐ");
         }
 
@@ -72,13 +72,13 @@ public class WalletService : IWalletService
             throw new InvalidOperationException(
                 $"Insufficient balance. Available: {wallet.AvailableBalance:N0} VNĐ, Required: {amount:N0} VNĐ.");
 
-        var balanceBefore = wallet.Balance ?? 0;
+        var balanceBefore = wallet.Balance;
         wallet.Balance -= amount;
         wallet.LastUpdated = DateTime.UtcNow;
         _walletRepo.Update(wallet);
         await _walletRepo.SaveChangesAsync();
 
-        await RecordTransactionAsync(userId, "WITHDRAW", -amount, balanceBefore, wallet.Balance ?? 0,
+        await RecordTransactionAsync(userId, "WITHDRAW", -amount, balanceBefore, wallet.Balance,
             $"Withdraw: {amount:N0} VNĐ");
 
         return MapToResponse(wallet);
@@ -105,9 +105,9 @@ public class WalletService : IWalletService
 
     private static WalletResponse MapToResponse(CashWallet w) => new()
     {
-        Balance = w.Balance ?? 0,
-        LockedAmount = w.LockedAmount ?? 0,
-        AvailableBalance = w.AvailableBalance ?? 0,
-        LastUpdated = w.LastUpdated
+        Balance          = w.Balance,
+        LockedAmount     = w.LockedAmount,
+        AvailableBalance = w.AvailableBalance,
+        LastUpdated      = w.LastUpdated
     };
 }

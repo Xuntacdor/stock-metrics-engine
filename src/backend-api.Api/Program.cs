@@ -1,5 +1,6 @@
 using System.Text;
 using backend_api.Api.Data;
+using backend_api.Api.Middleware;
 using backend_api.Api.Repositories;
 using backend_api.Api.Services;
 using backend_api.Api.Workers;
@@ -12,6 +13,8 @@ using System.IdentityModel.Tokens.Jwt;
 using StackExchange.Redis;
 using Microsoft.OpenApi.Models;
 using PayOS;
+using Polly;
+using Polly.Extensions.Http;
 using Prometheus;
 using Serilog;
 using Serilog.Events;
@@ -25,7 +28,7 @@ Log.Logger = new LoggerConfiguration()
     .MinimumLevel.Override("System", LogEventLevel.Warning)
     .Enrich.FromLogContext()
     .WriteTo.Console(outputTemplate:
-        "[{Timestamp:HH:mm:ss} {Level:u3}] {SourceContext}: {Message:lj}{NewLine}{Exception}")
+        "[{Timestamp:HH:mm:ss} {Level:u3}] [{CorrelationId}] {SourceContext}: {Message:lj}{NewLine}{Exception}")
     .WriteTo.File(
         path: "logs/app-.json",
         rollingInterval: RollingInterval.Day,
@@ -145,10 +148,36 @@ builder.Services.AddScoped<ICorporateActionService, CorporateActionService>();
 
 builder.Services.AddScoped<INewsRepository, NewsRepository>();
 builder.Services.AddScoped<ICommentRepository, CommentRepository>();
+builder.Services.AddScoped<ILeaderboardRepository, LeaderboardRepository>();
 
 builder.Services.AddHostedService<DividendPayoutWorker>();
 
-builder.Services.AddHttpClient("FptAi");
+// ── FPT.AI HTTP client — retry + circuit breaker via Polly ───────────────────
+// Retry: up to 3 attempts, exponential back-off (2 s → 4 s → 8 s).
+// Circuit breaker: opens after 5 consecutive failures, stays open for 30 s.
+builder.Services.AddHttpClient("FptAi")
+    .AddPolicyHandler(HttpPolicyExtensions
+        .HandleTransientHttpError()
+        .WaitAndRetryAsync(
+            retryCount: 3,
+            sleepDurationProvider: attempt => TimeSpan.FromSeconds(Math.Pow(2, attempt)),
+            onRetry: (outcome, timespan, attempt, _) =>
+                Log.Warning(
+                    "FptAi retry {Attempt}/3 after {Delay}s — {Reason}",
+                    attempt, timespan.TotalSeconds,
+                    outcome.Exception?.Message ?? outcome.Result?.StatusCode.ToString())))
+    .AddPolicyHandler(HttpPolicyExtensions
+        .HandleTransientHttpError()
+        .CircuitBreakerAsync(
+            handledEventsAllowedBeforeBreaking: 5,
+            durationOfBreak: TimeSpan.FromSeconds(30),
+            onBreak: (outcome, breakDelay) =>
+                Log.Error(
+                    "FptAi circuit breaker OPEN for {BreakDelay}s — {Reason}",
+                    breakDelay.TotalSeconds,
+                    outcome.Exception?.Message ?? outcome.Result?.StatusCode.ToString()),
+            onReset: () => Log.Information("FptAi circuit breaker CLOSED — requests resuming"),
+            onHalfOpen: () => Log.Warning("FptAi circuit breaker HALF-OPEN — testing")));
 builder.Services.AddScoped<IKycRepository, KycRepository>();
 builder.Services.AddScoped<IKycService, KycService>();
 
@@ -168,6 +197,16 @@ builder.Services.AddHostedService<RiskMonitorWorker>();
 // ── Audit Trail ───────────────────────────────────────────────────────────────
 builder.Services.AddScoped<IAuditLogRepository, AuditLogRepository>();
 builder.Services.AddScoped<IAuditLogService, AuditLogService>();
+
+// ── Price Alerts ──────────────────────────────────────────────────────────────
+builder.Services.AddScoped<IPriceAlertRepository, PriceAlertRepository>();
+builder.Services.AddHostedService<AlertMonitorWorker>();
+
+// ── Screener ──────────────────────────────────────────────────────────────────
+builder.Services.AddScoped<IScreenerService, ScreenerService>();
+
+// ── Background workers ────────────────────────────────────────────────────────
+builder.Services.AddHostedService<PortfolioPnLWorker>();
 
 builder.Services.AddCors(options =>
 {
@@ -202,6 +241,9 @@ app.UseHttpsRedirection();
 app.UseStaticFiles();
 
 app.UseCors("AllowAllOrigins");
+
+// ── Correlation ID (must be early so all subsequent log lines have the ID) ────
+app.UseMiddleware<CorrelationIdMiddleware>();
 
 // ── Prometheus HTTP metrics middleware ────────────────────────────────────────
 app.UseHttpMetrics();

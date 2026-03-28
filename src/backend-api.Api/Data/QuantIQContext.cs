@@ -46,6 +46,8 @@ public partial class QuantIQContext : DbContext
 
     public virtual DbSet<AuditLog> AuditLogs { get; set; }
 
+    public virtual DbSet<PriceAlert> PriceAlerts { get; set; }
+
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -248,6 +250,9 @@ public partial class QuantIQContext : DbContext
             entity.Property(e => e.Exchange)
                 .HasMaxLength(10)
                 .IsUnicode(false);
+            entity.Property(e => e.Sector).HasMaxLength(100);
+            entity.Property(e => e.Pe).HasColumnType("decimal(10, 2)");
+            entity.Property(e => e.MarketCap).HasColumnType("decimal(20, 2)");
         });
 
         modelBuilder.Entity<Transaction>(entity =>
@@ -479,6 +484,37 @@ public partial class QuantIQContext : DbContext
             entity.Property(e => e.CreatedAt)
                 .HasDefaultValueSql("(getutcdate())")
                 .HasColumnType("datetime");
+        });
+
+        modelBuilder.Entity<PriceAlert>(entity =>
+        {
+            entity.HasKey(e => e.AlertId);
+            entity.ToTable("PriceAlerts");
+
+            entity.HasIndex(e => e.UserId).HasDatabaseName("IX_PriceAlerts_UserID");
+            entity.HasIndex(e => new { e.Symbol, e.IsActive }).HasDatabaseName("IX_PriceAlerts_Symbol_Active");
+
+            entity.Property(e => e.UserId)
+                .HasMaxLength(50).IsUnicode(false).HasColumnName("UserID");
+            entity.Property(e => e.Symbol)
+                .HasMaxLength(10).IsUnicode(false);
+            entity.Property(e => e.AlertType)
+                .HasMaxLength(20).IsUnicode(false);
+            entity.Property(e => e.Condition)
+                .HasMaxLength(10).IsUnicode(false);
+            entity.Property(e => e.ThresholdValue)
+                .HasColumnType("decimal(18, 4)");
+            entity.Property(e => e.CreatedAt)
+                .HasDefaultValueSql("(getutcdate())")
+                .HasColumnType("datetime");
+            entity.Property(e => e.TriggeredAt)
+                .HasColumnType("datetime");
+
+            entity.HasOne(e => e.User)
+                .WithMany()
+                .HasForeignKey(e => e.UserId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("FK_PriceAlerts_Users");
         });
 
         OnModelCreatingPartial(modelBuilder);

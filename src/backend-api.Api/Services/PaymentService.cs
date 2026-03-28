@@ -146,7 +146,7 @@ public class PaymentService : IPaymentService
             var wallet = await _walletRepo.GetByUserIdAsync(deposit.UserId)
                 ?? throw new InvalidOperationException($"Wallet not found for user {deposit.UserId}");
 
-            var balanceBefore  = wallet.Balance ?? 0;
+            var balanceBefore  = wallet.Balance;
             wallet.Balance     = balanceBefore + deposit.Amount;
             wallet.LastUpdated = DateTime.UtcNow;
             _walletRepo.Update(wallet);
@@ -162,7 +162,7 @@ public class PaymentService : IPaymentService
                 TransType     = "DEPOSIT",
                 Amount        = deposit.Amount,
                 BalanceBefore = balanceBefore,
-                BalanceAfter  = wallet.Balance ?? 0,
+                BalanceAfter  = wallet.Balance,
                 Description   = $"Nạp tiền qua PayOS - Mã GD: {deposit.OrderCode}",
                 TransTime     = DateTime.UtcNow
             };

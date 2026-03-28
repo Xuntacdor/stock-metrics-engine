@@ -1,5 +1,8 @@
+using System.Diagnostics;
+using backend_api.Api.Constants;
 using backend_api.Api.Data;
 using backend_api.Api.DTOs;
+using backend_api.Api.Metrics;
 using backend_api.Api.Models;
 using backend_api.Api.Repositories;
 using Microsoft.EntityFrameworkCore;
@@ -47,25 +50,27 @@ public class OrderService : IOrderService
 
         var order = new Order
         {
-            OrderId = Guid.NewGuid().ToString(),
-            UserId = userId,
-            Symbol = request.Symbol,
-            Side = request.Side.ToUpper(),
-            OrderType = request.OrderType.ToUpper(),
+            OrderId    = Guid.NewGuid().ToString(),
+            UserId     = userId,
+            Symbol     = request.Symbol,
+            Side       = request.Side.ToUpper(),
+            OrderType  = request.OrderType.ToUpper(),
             RequestQty = request.Quantity,
-            Price = request.Price,
-            Status = "PENDING",
+            Price      = request.Price,
+            Status     = OrderStatus.Pending,
             MatchedQty = 0,
-            CreatedAt = DateTime.UtcNow,
-            UpdatedAt = DateTime.UtcNow
+            CreatedAt  = DateTime.UtcNow,
+            UpdatedAt  = DateTime.UtcNow
         };
+
+        var sw = Stopwatch.StartNew();
 
         await using var dbTx = await _context.Database.BeginTransactionAsync();
         try
         {
-            if (request.Side.ToUpper() == "BUY")
+            if (request.Side.ToUpper() == OrderSide.Buy)
                 await HandleBuyPreCheck(wallet, order);
-            else if (request.Side.ToUpper() == "SELL")
+            else if (request.Side.ToUpper() == OrderSide.Sell)
                 await HandleSellPreCheck(userId, order);
             else
                 throw new ArgumentException("Side must be BUY or SELL.");
@@ -80,10 +85,14 @@ public class OrderService : IOrderService
         catch
         {
             await dbTx.RollbackAsync();
+            AppMetrics.OrdersTotal.WithLabels(order.Side, OrderStatus.Rejected).Inc();
             throw;
         }
 
-        // Audit Trail
+        sw.Stop();
+        AppMetrics.OrdersTotal.WithLabels(order.Side, order.Status).Inc();
+        AppMetrics.OrderLatencyMs.WithLabels(order.Side).Observe(sw.ElapsedMilliseconds);
+
         await _auditLog.LogAsync(userId, "PlaceOrder", new
         {
             order.OrderId,
@@ -112,7 +121,7 @@ public class OrderService : IOrderService
         if (order.UserId != userId)
             throw new UnauthorizedAccessException("You don't have permission to cancel this order.");
 
-        if (order.Status == "FILLED" || order.Status == "CANCELLED")
+        if (order.Status == OrderStatus.Filled || order.Status == OrderStatus.Cancelled)
             throw new InvalidOperationException($"Cannot cancel order in '{order.Status}' state.");
 
         var wallet = await _walletRepo.GetByUserIdAsync(userId)
@@ -121,26 +130,26 @@ public class OrderService : IOrderService
         await using var dbTx = await _context.Database.BeginTransactionAsync();
         try
         {
-            if (order.Side == "BUY")
+            if (order.Side == OrderSide.Buy)
             {
-                var remainingQty = order.RequestQty - (order.MatchedQty ?? 0);
+                var remainingQty = order.RequestQty - order.MatchedQty;
                 var refundAmount = order.Price * remainingQty;
                 wallet.LockedAmount -= refundAmount;
                 wallet.LastUpdated = DateTime.UtcNow;
                 _walletRepo.Update(wallet);
             }
-            else if (order.Side == "SELL")
+            else if (order.Side == OrderSide.Sell)
             {
                 var portfolio = await _portfolioRepo.GetByUserAndSymbolAsync(userId, order.Symbol);
                 if (portfolio != null)
                 {
-                    var remainingQty = order.RequestQty - (order.MatchedQty ?? 0);
+                    var remainingQty = order.RequestQty - order.MatchedQty;
                     portfolio.LockedQuantity -= remainingQty;
                     _portfolioRepo.Update(portfolio);
                 }
             }
 
-            order.Status = "CANCELLED";
+            order.Status = OrderStatus.Cancelled;
             order.UpdatedAt = DateTime.UtcNow;
             _orderRepo.Update(order);
 
@@ -153,7 +162,8 @@ public class OrderService : IOrderService
             throw;
         }
 
-        // Audit Trail
+        AppMetrics.OrdersTotal.WithLabels(order.Side, OrderStatus.Cancelled).Inc();
+
         await _auditLog.LogAsync(userId, "CancelOrder", new { orderId, order.Symbol, order.Side });
     }
 
@@ -198,10 +208,10 @@ public class OrderService : IOrderService
 
         order.MatchedQty = matchedQty;
         order.AvgMatchedPrice = matchPrice;
-        order.Status = "FILLED";
+        order.Status = OrderStatus.Filled;
         order.UpdatedAt = DateTime.UtcNow;
 
-        if (order.Side == "BUY")
+        if (order.Side == OrderSide.Buy)
             await SettleBuyAsync(order, wallet, userId, matchedQty, matchPrice);
         else
             await SettleSellAsync(order, wallet, userId, matchedQty, matchPrice);
@@ -213,50 +223,51 @@ public class OrderService : IOrderService
     private async Task SettleBuyAsync(Order order, CashWallet wallet, string userId, int matchedQty, decimal matchPrice)
     {
         var cost = matchPrice * matchedQty;
+        var balanceBefore = wallet.Balance;
 
-        var balanceBefore = wallet.Balance ?? 0;
         wallet.Balance -= cost;
         wallet.LockedAmount -= cost;
         wallet.LastUpdated = DateTime.UtcNow;
         _walletRepo.Update(wallet);
-        await _walletRepo.SaveChangesAsync();
 
         var portfolio = await _portfolioRepo.GetByUserAndSymbolAsync(userId, order.Symbol);
         if (portfolio == null)
         {
             portfolio = new Portfolio
             {
-                UserId = userId,
-                Symbol = order.Symbol,
+                UserId        = userId,
+                Symbol        = order.Symbol,
                 TotalQuantity = matchedQty,
                 LockedQuantity = 0,
-                AvgCostPrice = matchPrice
+                AvgCostPrice  = matchPrice
             };
             await _portfolioRepo.AddAsync(portfolio);
         }
         else
         {
-            var oldQty = portfolio.TotalQuantity ?? 0;
-            var oldAvg = portfolio.AvgCostPrice ?? 0;
-            portfolio.AvgCostPrice = (oldAvg * oldQty + matchPrice * matchedQty) / (oldQty + matchedQty);
+            var oldQty = portfolio.TotalQuantity;
+            var oldAvg = portfolio.AvgCostPrice;
+            portfolio.AvgCostPrice  = (oldAvg * oldQty + matchPrice * matchedQty) / (oldQty + matchedQty);
             portfolio.TotalQuantity = oldQty + matchedQty;
             _portfolioRepo.Update(portfolio);
         }
-        await _portfolioRepo.SaveChangesAsync();
 
-        await RecordTransactionAsync(userId, order.OrderId, "BUY", -cost, balanceBefore, wallet.Balance ?? 0,
+        await BuildTransactionAsync(userId, order.OrderId, TransactionType.Buy, -cost,
+            balanceBefore, wallet.Balance,
             $"Buy {matchedQty} shares of {order.Symbol} at {matchPrice:N0}");
+
+        // Single round-trip: wallet + portfolio + transaction
+        await _context.SaveChangesAsync();
     }
 
     private async Task SettleSellAsync(Order order, CashWallet wallet, string userId, int matchedQty, decimal matchPrice)
     {
         var proceeds = matchPrice * matchedQty;
+        var balanceBefore = wallet.Balance;
 
-        var balanceBefore = wallet.Balance ?? 0;
         wallet.Balance += proceeds;
         wallet.LastUpdated = DateTime.UtcNow;
         _walletRepo.Update(wallet);
-        await _walletRepo.SaveChangesAsync();
 
         var portfolio = await _portfolioRepo.GetByUserAndSymbolAsync(userId, order.Symbol)
             ?? throw new InvalidOperationException("Portfolio not found when settle sell.");
@@ -265,47 +276,53 @@ public class OrderService : IOrderService
         portfolio.LockedQuantity -= matchedQty;
         if (portfolio.TotalQuantity <= 0)
         {
-            portfolio.TotalQuantity = 0;
+            portfolio.TotalQuantity  = 0;
             portfolio.LockedQuantity = 0;
-            portfolio.AvgCostPrice = 0;
+            portfolio.AvgCostPrice   = 0;
         }
         _portfolioRepo.Update(portfolio);
-        await _portfolioRepo.SaveChangesAsync();
 
-        await RecordTransactionAsync(userId, order.OrderId, "SELL", proceeds, balanceBefore, wallet.Balance ?? 0,
+        await BuildTransactionAsync(userId, order.OrderId, TransactionType.Sell, proceeds,
+            balanceBefore, wallet.Balance,
             $"Sell {matchedQty} shares of {order.Symbol} at {matchPrice:N0}");
+
+        // Single round-trip: wallet + portfolio + transaction
+        await _context.SaveChangesAsync();
     }
 
-    private async Task RecordTransactionAsync(
+    /// <summary>
+    /// Stages a transaction record in the EF change tracker WITHOUT saving.
+    /// The caller is responsible for calling SaveChangesAsync once all changes are staged.
+    /// </summary>
+    private async Task BuildTransactionAsync(
         string userId, string refId, string transType,
         decimal amount, decimal balanceBefore, decimal balanceAfter, string description)
     {
         var tx = new Transaction
         {
-            UserId = userId,
-            RefId = refId,
-            TransType = transType,
-            Amount = amount,
+            UserId        = userId,
+            RefId         = refId,
+            TransType     = transType,
+            Amount        = amount,
             BalanceBefore = balanceBefore,
-            BalanceAfter = balanceAfter,
-            Description = description,
-            TransTime = DateTime.UtcNow
+            BalanceAfter  = balanceAfter,
+            Description   = description,
+            TransTime     = DateTime.UtcNow
         };
         await _transactionRepo.AddAsync(tx);
-        await _transactionRepo.SaveChangesAsync();
     }
 
     private static OrderResponse MapToResponse(Order o) => new()
     {
-        OrderId = o.OrderId,
-        Symbol = o.Symbol,
-        Side = o.Side,
-        OrderType = o.OrderType,
-        Status = o.Status ?? "PENDING",
-        RequestQty = o.RequestQty,
-        MatchedQty = o.MatchedQty,
-        Price = o.Price,
+        OrderId         = o.OrderId,
+        Symbol          = o.Symbol,
+        Side            = o.Side,
+        OrderType       = o.OrderType,
+        Status          = o.Status,
+        RequestQty      = o.RequestQty,
+        MatchedQty      = o.MatchedQty,
+        Price           = o.Price,
         AvgMatchedPrice = o.AvgMatchedPrice,
-        CreatedAt = o.CreatedAt
+        CreatedAt       = o.CreatedAt
     };
 }

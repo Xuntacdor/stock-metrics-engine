@@ -31,9 +31,9 @@ public class PortfolioService : IPortfolioService
                 .OrderByDescending(c => c.Timestamp)
                 .FirstOrDefaultAsync();
 
-            var currentPrice = latestCandle?.Close ?? h.AvgCostPrice ?? 0;
-            var avgCost = h.AvgCostPrice ?? 0;
-            var qty = h.TotalQuantity ?? 0;
+            var currentPrice = latestCandle?.Close ?? h.AvgCostPrice;
+            var avgCost = h.AvgCostPrice;
+            var qty = h.TotalQuantity;
             var marketValue = currentPrice * qty;
             var unrealizedPnL = (currentPrice - avgCost) * qty;
             var costBasis = avgCost * qty;
@@ -43,8 +43,8 @@ public class PortfolioService : IPortfolioService
             {
                 Symbol = h.Symbol,
                 TotalQuantity = qty,
-                AvailableQuantity = h.AvailableQuantity ?? 0,
-                LockedQuantity = h.LockedQuantity ?? 0,
+                AvailableQuantity = h.AvailableQuantity,
+                LockedQuantity = h.LockedQuantity,
                 AvgCostPrice = avgCost,
                 CurrentPrice = currentPrice,
                 MarketValue = marketValue,

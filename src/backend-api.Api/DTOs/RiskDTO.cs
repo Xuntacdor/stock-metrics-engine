@@ -13,3 +13,5 @@ public record RiskAlertResponse(
     DateTime CreatedAt);
 
 public record SimulateLoanRequest(decimal LoanAmount);
+
+public record MarginRatioResponse(string Symbol, decimal InitialRate, decimal MaintenanceRate);

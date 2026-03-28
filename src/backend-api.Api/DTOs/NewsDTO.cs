@@ -35,6 +35,17 @@ public record CommentDto(
 
 public record CreateCommentRequest(string Content);
 
+/// <summary>Aggregated sentiment score for a single day.</summary>
+public record SentimentDayDto(
+    DateOnly Date,
+    int Total,
+    int Bullish,
+    int Bearish,
+    int Neutral,
+    double AvgScore,      // 0.0 – 1.0
+    string Signal         // BULLISH | BEARISH | NEUTRAL
+);
+
 public record LeaderboardEntryDto(
     int Rank,
     string UserId,
