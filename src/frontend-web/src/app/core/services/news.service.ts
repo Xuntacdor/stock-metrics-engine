@@ -36,6 +36,16 @@ export interface NewsComment {
     createdAt: string;
 }
 
+export interface SentimentDay {
+    date: string;        // "YYYY-MM-DD"
+    total: number;
+    bullish: number;
+    bearish: number;
+    neutral: number;
+    avgScore: number;    // 0.0 – 1.0 model confidence
+    signal: 'BULLISH' | 'BEARISH' | 'NEUTRAL';
+}
+
 export interface LeaderboardEntry {
     rank: number;
     userId: string;
@@ -58,6 +68,17 @@ export class NewsService {
 
     getSentimentSummary(symbol: string, days = 7): Observable<SentimentSummary> {
         return this.http.get<SentimentSummary>(`${this.base}/news/sentiment`, {
+            params: { symbol, days },
+        });
+    }
+
+    /**
+     * GET /api/news/sentiment/trend?symbol=FPT&days=30
+     * Returns daily aggregated sentiment scores ordered by date ascending.
+     * Use for rendering a sentiment trend chart on the stock detail page.
+     */
+    getSentimentTrend(symbol: string, days = 30): Observable<SentimentDay[]> {
+        return this.http.get<SentimentDay[]>(`${this.base}/news/sentiment/trend`, {
             params: { symbol, days },
         });
     }

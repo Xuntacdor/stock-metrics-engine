@@ -25,6 +25,12 @@ export interface RiskAlertItem {
     createdAt: string;
 }
 
+export interface MarginRatioItem {
+    symbol: string;
+    initialRate: number;
+    maintenanceRate: number;
+}
+
 @Injectable({ providedIn: 'root' })
 export class RiskService {
     private readonly http = inject(HttpClient);
@@ -33,10 +39,12 @@ export class RiskService {
     private readonly _buyingPower = signal<BuyingPowerResponse | null>(null);
     private readonly _rtt = signal<RttResponse | null>(null);
     private readonly _alerts = signal<RiskAlertItem[]>([]);
+    private readonly _marginRatios = signal<MarginRatioItem[]>([]);
 
     readonly buyingPower = this._buyingPower.asReadonly();
     readonly rtt = this._rtt.asReadonly();
     readonly alerts = this._alerts.asReadonly();
+    readonly marginRatios = this._marginRatios.asReadonly();
 
     loadBuyingPower(): Observable<BuyingPowerResponse> {
         return this.http.get<BuyingPowerResponse>(`${this.riskUrl}/buying-power`).pipe(
@@ -55,6 +63,13 @@ export class RiskService {
     loadAlerts(limit = 20): Observable<RiskAlertItem[]> {
         return this.http.get<RiskAlertItem[]>(`${this.riskUrl}/alerts?limit=${limit}`).pipe(
             tap(res => this._alerts.set(res)),
+            catchError(() => of([]))
+        );
+    }
+
+    loadMarginRatios(): Observable<MarginRatioItem[]> {
+        return this.http.get<MarginRatioItem[]>(`${this.riskUrl}/margin-ratios`).pipe(
+            tap(res => this._marginRatios.set(res)),
             catchError(() => of([]))
         );
     }
