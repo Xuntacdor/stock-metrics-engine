@@ -31,4 +31,19 @@ public class PortfolioController : ControllerBase
             return BadRequest(new { message = ex.Message });
         }
     }
+
+    [HttpGet("realized-pnl")]
+    public async Task<IActionResult> GetRealizedPnL()
+    {
+        try
+        {
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
+            var result = await _portfolioService.GetRealizedPnLAsync(userId);
+            return Ok(result);
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
 }

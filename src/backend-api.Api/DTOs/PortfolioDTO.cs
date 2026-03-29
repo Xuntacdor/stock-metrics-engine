@@ -21,3 +21,24 @@ public class PortfolioSummaryResponse
     public decimal TotalUnrealizedPnLPercent { get; set; }
     public List<PortfolioItemResponse> Holdings { get; set; } = new();
 }
+
+public class RealizedPnLResponse
+{
+    public decimal TotalRealizedPnL { get; set; }
+    public decimal TotalFees { get; set; }
+    public decimal TotalTaxes { get; set; }
+    public decimal NetRealizedPnL { get; set; }
+    public List<RealizedPnLItemResponse> Trades { get; set; } = new();
+}
+
+public class RealizedPnLItemResponse
+{
+    public string? Symbol { get; set; }
+    public int? Quantity { get; set; }
+    public decimal? Price { get; set; }
+    public decimal Amount { get; set; }
+    public decimal Fee { get; set; }
+    public decimal Tax { get; set; }
+    public decimal RealizedPnL { get; set; }
+    public DateTime? TransTime { get; set; }
+}
