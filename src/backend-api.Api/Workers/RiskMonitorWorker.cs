@@ -2,10 +2,10 @@ using backend_api.Api.Constants;
 using backend_api.Api.Data;
 using backend_api.Api.Models;
 using backend_api.Api.Repositories;
+using backend_api.Api.Services;
 using Microsoft.EntityFrameworkCore;
 
 namespace backend_api.Api.Workers;
-
 
 public class RiskMonitorWorker : BackgroundService
 {
@@ -47,9 +47,10 @@ public class RiskMonitorWorker : BackgroundService
     private async Task MonitorAllUsersAsync(CancellationToken stoppingToken)
     {
         using var scope = _scopeFactory.CreateScope();
-        var context    = scope.ServiceProvider.GetRequiredService<QuantIQContext>();
-        var riskService  = scope.ServiceProvider.GetRequiredService<Services.IMarginRiskService>();
-        var alertRepo  = scope.ServiceProvider.GetRequiredService<IRiskAlertRepository>();
+        var context      = scope.ServiceProvider.GetRequiredService<QuantIQContext>();
+        var riskService  = scope.ServiceProvider.GetRequiredService<IMarginRiskService>();
+        var alertRepo    = scope.ServiceProvider.GetRequiredService<IRiskAlertRepository>();
+        var emailService = scope.ServiceProvider.GetRequiredService<IEmailService>();
 
         var usersWithLoan = await context.CashWallets
             .Where(w => w.LoanAmount > 0)
@@ -63,7 +64,7 @@ public class RiskMonitorWorker : BackgroundService
         foreach (var userId in usersWithLoan)
         {
             if (stoppingToken.IsCancellationRequested) break;
-            await CheckUserRiskAsync(userId, riskService, alertRepo, stoppingToken);
+            await CheckUserRiskAsync(userId, context, riskService, alertRepo, emailService, stoppingToken);
         }
 
         await alertRepo.SaveChangesAsync();
@@ -71,17 +72,21 @@ public class RiskMonitorWorker : BackgroundService
 
     private async Task CheckUserRiskAsync(
         string userId,
-        Services.IMarginRiskService riskService,
+        QuantIQContext context,
+        IMarginRiskService riskService,
         IRiskAlertRepository alertRepo,
+        IEmailService emailService,
         CancellationToken stoppingToken)
     {
         try
         {
             var rtt = await riskService.CalculateRttAsync(userId);
 
-            if (rtt == decimal.MaxValue) return; 
+            if (rtt == decimal.MaxValue) return;
 
             _logger.LogInformation("RiskMonitorWorker: User {UserId} — Rtt = {Rtt:P2}", userId, rtt);
+
+            var user = await context.Users.FirstOrDefaultAsync(u => u.UserId == userId, stoppingToken);
 
             if (rtt < ForceSellThreshold)
             {
@@ -99,6 +104,9 @@ public class RiskMonitorWorker : BackgroundService
                 });
 
                 await riskService.ExecuteForceSellAsync(userId);
+
+                if (user?.Email != null)
+                    await emailService.SendForceSellAsync(user.Email, userId, rtt);
             }
             else if (rtt < CallMarginThreshold)
             {
@@ -114,6 +122,9 @@ public class RiskMonitorWorker : BackgroundService
                     Message   = $"Tỷ lệ tài khoản {rtt:P2} xuống dưới ngưỡng {CallMarginThreshold:P0}. Vui lòng nộp thêm tiền ký quỹ.",
                     CreatedAt = DateTime.UtcNow
                 });
+
+                if (user?.Email != null)
+                    await emailService.SendMarginCallAsync(user.Email, userId, rtt);
             }
         }
         catch (Exception ex)

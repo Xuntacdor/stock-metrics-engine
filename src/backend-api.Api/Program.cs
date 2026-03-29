@@ -205,6 +205,9 @@ builder.Services.AddHostedService<AlertMonitorWorker>();
 // ── Screener ──────────────────────────────────────────────────────────────────
 builder.Services.AddScoped<IScreenerService, ScreenerService>();
 
+// ── Email ─────────────────────────────────────────────────────────────────────
+builder.Services.AddScoped<IEmailService, EmailService>();
+
 // ── Background workers ────────────────────────────────────────────────────────
 builder.Services.AddHostedService<PortfolioPnLWorker>();
 
