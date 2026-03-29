@@ -3,6 +3,7 @@ import {
   ChangeDetectionStrategy,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
 import { CardComponent } from '../../shared/molecules/card/card.component';
 import { TabNavComponent, type TabItem } from '../../shared/molecules/tab-nav/tab-nav.component';
 import { FormFieldComponent } from '../../shared/molecules/form-field/form-field.component';
@@ -16,7 +17,7 @@ import { AlertService, type AlertRule, type AlertTriggeredNotification } from '.
 @Component({
   selector: 'app-alerts',
   standalone: true,
-  imports: [CommonModule, CardComponent, TabNavComponent, FormFieldComponent, BadgeComponent, ButtonComponent, InputComponent, LabelComponent, IconComponent],
+  imports: [CommonModule, FormsModule, CardComponent, TabNavComponent, FormFieldComponent, BadgeComponent, ButtonComponent, InputComponent, LabelComponent, IconComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="p-4 md:p-6 space-y-6 animate-fade-in"

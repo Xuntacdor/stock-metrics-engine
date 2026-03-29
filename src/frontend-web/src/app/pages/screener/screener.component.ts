@@ -11,9 +11,8 @@ import { ButtonComponent } from '../../shared/atoms/button/button.component';
 import { InputComponent } from '../../shared/atoms/input/input.component';
 import { IconComponent } from '../../shared/atoms/icon/icon.component';
 import { SkeletonComponent } from '../../shared/atoms/skeleton/skeleton.component';
-import { type StockRow } from '../../shared/organisms/price-table/price-table.component';
 import { getPriceColorClass, type PriceColor } from '../../core/tokens/colors';
-import { ScreenerService } from '../../core/services/screener.service';
+import { ScreenerService, type ScreenerResult } from '../../core/services/screener.service';
 import { MarketDataService } from '../../core/services/market-data.service';
 import { inject, OnInit, OnDestroy } from '@angular/core';
 
@@ -25,12 +24,6 @@ interface ScreenerFilter {
   sector: string;
 }
 
-interface ScreenerResult extends StockRow {
-  pe: number;
-  rsi: number;
-  marketCap: number;
-  sector: string;
-}
 
 @Component({
   selector: 'app-screener',
