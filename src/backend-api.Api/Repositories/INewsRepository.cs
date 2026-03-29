@@ -10,4 +10,5 @@ public interface INewsRepository
     Task<List<SentimentDayDto>> GetSentimentTrendAsync(string symbol, int days = 30);
     Task<bool> ExistsByUrlAsync(string url);
     Task UpsertAsync(NewsArticle article);
+    Task<List<NewsArticleDto>> SearchAsync(string query, int limit = 20);
 }

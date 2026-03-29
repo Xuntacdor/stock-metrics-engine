@@ -94,4 +94,27 @@ public class NewsRepository : INewsRepository
             await _ctx.SaveChangesAsync();
         }
     }
+
+    public async Task<List<NewsArticleDto>> SearchAsync(string query, int limit = 20)
+    {
+        if (string.IsNullOrWhiteSpace(query))
+            return await GetBySymbolAsync(null, limit);
+
+        // Sanitize: remove SQL special chars for CONTAINS
+        var safeQuery = "\"" + query.Replace("\"", "").Replace("'", "").Trim() + "\"";
+
+        var sql = $@"
+            SELECT TOP ({Math.Min(limit, 100)})
+                ArticleId, Symbol, Title, Url, Source, Summary, PublishedAt, Sentiment, SentimentScore
+            FROM NewsArticles
+            WHERE CONTAINS((Title, Summary), {{0}})
+            ORDER BY PublishedAt DESC";
+
+        return await _ctx.NewsArticles
+            .FromSqlRaw(sql, safeQuery)
+            .Select(a => new NewsArticleDto(
+                a.ArticleId, a.Symbol, a.Title, a.Url, a.Source,
+                a.Summary, a.PublishedAt, a.Sentiment, a.SentimentScore))
+            .ToListAsync();
+    }
 }

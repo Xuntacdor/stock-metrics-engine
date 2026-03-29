@@ -49,4 +49,16 @@ public class NewsController : ControllerBase
         var trend = await _news.GetSentimentTrendAsync(symbol, days);
         return Ok(trend);
     }
+
+    /// <summary>GET /api/news/search?q=FPT+tăng&amp;limit=20</summary>
+    [HttpGet("search")]
+    [AllowAnonymous]
+    public async Task<IActionResult> Search([FromQuery] string q, [FromQuery] int limit = 20)
+    {
+        if (string.IsNullOrWhiteSpace(q))
+            return BadRequest(new { message = "Query parameter 'q' is required." });
+
+        var results = await _news.SearchAsync(q, limit);
+        return Ok(results);
+    }
 }
