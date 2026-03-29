@@ -30,6 +30,9 @@ namespace backend_api.Api.Migrations
                 maxLength: 100,
                 nullable: true);
 
+            // Drop computed columns that depend on TotalQuantity/LockedQuantity before altering them
+            migrationBuilder.DropColumn(name: "AvailableQuantity", table: "Portfolios");
+
             migrationBuilder.AlterColumn<int>(
                 name: "TotalQuantity",
                 table: "Portfolios",
@@ -111,6 +114,9 @@ namespace backend_api.Api.Migrations
                 oldNullable: true,
                 oldDefaultValueSql: "(getdate())");
 
+            // Drop computed column that depends on Balance/LockedAmount before altering them
+            migrationBuilder.DropColumn(name: "AvailableBalance", table: "CashWallets");
+
             migrationBuilder.AlterColumn<decimal>(
                 name: "LockedAmount",
                 table: "CashWallets",
@@ -144,31 +150,21 @@ namespace backend_api.Api.Migrations
                 oldNullable: true,
                 oldDefaultValue: 0m);
 
-            migrationBuilder.AlterColumn<int>(
+            migrationBuilder.AddColumn<int>(
                 name: "AvailableQuantity",
                 table: "Portfolios",
                 type: "int",
                 nullable: false,
                 computedColumnSql: "([TotalQuantity]-[LockedQuantity])",
-                stored: true,
-                oldClrType: typeof(int),
-                oldType: "int",
-                oldNullable: true,
-                oldComputedColumnSql: "([TotalQuantity]-[LockedQuantity])",
-                oldStored: true);
+                stored: true);
 
-            migrationBuilder.AlterColumn<decimal>(
+            migrationBuilder.AddColumn<decimal>(
                 name: "AvailableBalance",
                 table: "CashWallets",
                 type: "decimal(19,4)",
                 nullable: false,
                 computedColumnSql: "([Balance]-[LockedAmount])",
-                stored: true,
-                oldClrType: typeof(decimal),
-                oldType: "decimal(19,4)",
-                oldNullable: true,
-                oldComputedColumnSql: "([Balance]-[LockedAmount])",
-                oldStored: true);
+                stored: true);
 
             migrationBuilder.CreateTable(
                 name: "PriceAlerts",
