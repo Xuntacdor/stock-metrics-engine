@@ -17,6 +17,7 @@ public class PaymentService : IPaymentService
     private readonly PayOSClient _payOS;
     private readonly ILogger<PaymentService> _logger;
     private readonly IAuditLogService _auditLog;
+    private readonly ICacheService _cache;
 
     public PaymentService(
         IDepositRepository depositRepo,
@@ -25,7 +26,8 @@ public class PaymentService : IPaymentService
         QuantIQContext context,
         PayOSClient payOS,
         ILogger<PaymentService> logger,
-        IAuditLogService auditLog)
+        IAuditLogService auditLog,
+        ICacheService cache)
     {
         _depositRepo     = depositRepo;
         _walletRepo      = walletRepo;
@@ -34,6 +36,7 @@ public class PaymentService : IPaymentService
         _payOS           = payOS;
         _logger          = logger;
         _auditLog        = auditLog;
+        _cache           = cache;
     }
 
 
@@ -118,6 +121,15 @@ public class PaymentService : IPaymentService
         _logger.LogInformation(
             "PayOS webhook received: OrderCode={Code}, PayloadCode={PCode}",
             webhookData.OrderCode, webhookPayload.Code);
+
+        // Idempotency: acquire a distributed lock per orderCode
+        var lockKey = $"webhook:lock:{webhookData.OrderCode}";
+        var acquired = await _cache.SetIfNotExistsAsync(lockKey, "processing", TimeSpan.FromSeconds(30));
+        if (!acquired)
+        {
+            _logger.LogWarning("Webhook for OrderCode={Code} is already being processed. Skipped.", webhookData.OrderCode);
+            return;
+        }
 
         if (webhookPayload.Code != "00")
         {
