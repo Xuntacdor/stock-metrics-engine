@@ -1,6 +1,8 @@
+using backend_api.Api.Data;
 using backend_api.Api.DTOs;
 using backend_api.Api.Models;
 using backend_api.Api.Repositories;
+using Microsoft.EntityFrameworkCore;
 
 namespace backend_api.Api.Services;
 
@@ -9,15 +11,18 @@ public class SymbolService : ISymbolService
     private readonly ISymbolRepository _symbolRepo;
     private readonly ICacheService _cache;
     private readonly ILogger<SymbolService> _logger;
+    private readonly QuantIQContext _context;
 
     private const string AllSymbolsCacheKey = "symbols:all";
     private static readonly TimeSpan SymbolCacheTtl = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan CandleCacheTtl = TimeSpan.FromSeconds(30);
 
-    public SymbolService(ISymbolRepository symbolRepo, ICacheService cache, ILogger<SymbolService> logger)
+    public SymbolService(ISymbolRepository symbolRepo, ICacheService cache, ILogger<SymbolService> logger, QuantIQContext context)
     {
         _symbolRepo = symbolRepo;
         _cache = cache;
         _logger = logger;
+        _context = context;
     }
 
     public async Task<IEnumerable<SymbolDto>> GetAllSymbolsAsync()
@@ -84,5 +89,41 @@ public class SymbolService : ISymbolService
 
         // Invalidate cache
         await _cache.RemoveAsync(AllSymbolsCacheKey);
+    }
+
+    public async Task<List<CandleDto>> GetCandlesAsync(string symbol, int limit = 200)
+    {
+        var sym = symbol.ToUpper().Trim();
+        var cacheKey = $"candles:{sym}:{limit}";
+
+        var cached = await _cache.GetAsync<List<CandleDto>>(cacheKey);
+        if (cached != null)
+        {
+            _logger.LogDebug("[Cache HIT] {Key}", cacheKey);
+            return cached;
+        }
+
+        _logger.LogDebug("[Cache MISS] {Key} — querying DB", cacheKey);
+
+        var candles = await _context.Candles
+            .Where(c => c.Symbol == sym)
+            .OrderByDescending(c => c.Timestamp)
+            .Take(Math.Min(limit, 500))
+            .Select(c => new CandleDto
+            {
+                Timestamp = c.Timestamp,
+                Open      = c.Open,
+                High      = c.High,
+                Low       = c.Low,
+                Close     = c.Close,
+                Volume    = c.Volume
+            })
+            .ToListAsync();
+
+        // Return in ascending order for chart rendering
+        candles = candles.OrderBy(c => c.Timestamp).ToList();
+
+        await _cache.SetAsync(cacheKey, candles, CandleCacheTtl);
+        return candles;
     }
 }

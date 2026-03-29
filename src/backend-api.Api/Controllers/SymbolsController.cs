@@ -56,4 +56,16 @@ public class SymbolsController : ControllerBase
             return BadRequest(new { message = $"Can't delete symbol {symbol} because it has related data." });
         }
     }
+
+    /// <summary>GET /api/symbols/{symbol}/candles?limit=200 — Redis-cached for 30 s</summary>
+    [HttpGet("{symbol}/candles")]
+    [AllowAnonymous]
+    public async Task<IActionResult> GetCandles(string symbol, [FromQuery] int limit = 200)
+    {
+        if (string.IsNullOrWhiteSpace(symbol))
+            return BadRequest(new { message = "Symbol is required." });
+
+        var candles = await _symbolService.GetCandlesAsync(symbol, limit);
+        return Ok(candles);
+    }
 }
