@@ -51,4 +51,9 @@ public class CacheService : ICacheService
     {
         await _database.KeyDeleteAsync(key);
     }
+
+    public async Task<bool> SetIfNotExistsAsync(string key, string value, TimeSpan expiry)
+    {
+        return await _database.StringSetAsync(key, value, expiry, When.NotExists);
+    }
 }

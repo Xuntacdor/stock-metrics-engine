@@ -13,4 +13,11 @@ public interface ICacheService
 
     /// <summary>Remove a key from cache.</summary>
     Task RemoveAsync(string key);
+
+    /// <summary>
+    /// Set a key only if it does not already exist (NX semantics).
+    /// Returns true if the key was set, false if it already existed.
+    /// Used for distributed locking / idempotency guards.
+    /// </summary>
+    Task<bool> SetIfNotExistsAsync(string key, string value, TimeSpan expiry);
 }
