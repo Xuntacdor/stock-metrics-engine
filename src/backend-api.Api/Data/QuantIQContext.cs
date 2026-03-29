@@ -278,6 +278,10 @@ public partial class QuantIQContext : DbContext
                 .HasMaxLength(50)
                 .IsUnicode(false)
                 .HasColumnName("UserID");
+            entity.Property(e => e.Fee).HasColumnType("decimal(18, 4)");
+            entity.Property(e => e.Tax).HasColumnType("decimal(18, 4)");
+            entity.Property(e => e.Symbol).HasMaxLength(10).IsUnicode(false);
+            entity.Property(e => e.Price).HasColumnType("decimal(18, 4)");
 
             entity.HasOne(d => d.User).WithMany(p => p.Transactions)
                 .HasForeignKey(d => d.UserId)

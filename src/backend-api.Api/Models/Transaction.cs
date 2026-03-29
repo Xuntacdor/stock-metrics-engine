@@ -23,5 +23,15 @@ public partial class Transaction
 
     public DateTime? TransTime { get; set; }
 
+    public decimal? Fee { get; set; }
+
+    public decimal? Tax { get; set; }
+
+    public string? Symbol { get; set; }
+
+    public int? Quantity { get; set; }
+
+    public decimal? Price { get; set; }
+
     public virtual User User { get; set; } = null!;
 }
