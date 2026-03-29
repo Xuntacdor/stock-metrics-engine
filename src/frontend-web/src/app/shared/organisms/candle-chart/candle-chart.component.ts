@@ -21,6 +21,12 @@ export interface CandlePoint {
   volume: number;
 }
 
+export interface SentimentMarker {
+  date: string;      // "YYYY-MM-DD"
+  signal: 'BULLISH' | 'BEARISH' | 'NEUTRAL';
+  avgScore: number;
+}
+
 
 @Component({
   selector: 'app-candle-chart',
@@ -153,6 +159,7 @@ export class CandleChartComponent implements AfterViewInit, OnDestroy {
   readonly ma50 = input(63.2);
   readonly lastPrice = input<number | null>(null);
   readonly lastChangePct = input<number | null>(null);
+  readonly sentimentMarkers = input<SentimentMarker[]>([]);
 
   readonly timeframeChanged = output<ChartTimeframe>();
 
@@ -245,6 +252,20 @@ export class CandleChartComponent implements AfterViewInit, OnDestroy {
           low: c.low,
           close: c.close,
         })));
+
+        const markers = this.sentimentMarkers()
+          .filter(m => m.signal !== 'NEUTRAL')
+          .map(m => ({
+            time: m.date as never,
+            position: m.signal === 'BULLISH' ? 'belowBar' : 'aboveBar',
+            color: m.signal === 'BULLISH' ? '#10B981' : '#DC2626',
+            shape: m.signal === 'BULLISH' ? 'arrowUp' : 'arrowDown',
+            text: m.signal === 'BULLISH' ? '📈' : '📉',
+            size: 1,
+          }));
+        if (markers.length > 0) {
+          series.setMarkers(markers as never);
+        }
       }
 
       this.chartInstance = chart;

@@ -4,7 +4,7 @@ import {
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { CandleChartComponent } from '../../shared/organisms/candle-chart/candle-chart.component';
+import { CandleChartComponent, type SentimentMarker } from '../../shared/organisms/candle-chart/candle-chart.component';
 import { CardComponent } from '../../shared/molecules/card/card.component';
 import { PriceDisplayComponent } from '../../shared/molecules/price-display/price-display.component';
 import { BadgeComponent } from '../../shared/atoms/badge/badge.component';
@@ -58,6 +58,7 @@ export class StockDetailComponent implements OnInit {
   readonly chartCandles    = signal<any[]>([]);
   readonly news            = signal<NewsArticle[]>([]);
   readonly sentimentSummary = signal<SentimentSummary | null>(null);
+  readonly sentimentMarkers = signal<SentimentMarker[]>([]);
   readonly comments        = signal<NewsComment[]>([]);
   readonly orderBook       = signal<OrderBookLevel[]>([]);
 
@@ -190,6 +191,14 @@ export class StockDetailComponent implements OnInit {
     });
     this.newsSvc.getSentimentSummary(symbol).subscribe({
       next: (s) => this.sentimentSummary.set(s),
+      error: () => {},
+    });
+    this.newsSvc.getSentimentTrend(symbol, 30).subscribe({
+      next: (days) => {
+        this.sentimentMarkers.set(
+          days.map(d => ({ date: d.date, signal: d.signal, avgScore: d.avgScore }))
+        );
+      },
       error: () => {},
     });
   }
