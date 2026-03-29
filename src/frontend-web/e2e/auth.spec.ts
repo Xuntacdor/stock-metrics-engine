@@ -19,21 +19,19 @@ test.describe('Authentication', () => {
     test('login with invalid credentials shows error', async ({ page }) => {
         await page.goto('/auth/login');
         await page.getByLabel(/email/i).fill('nobody@nowhere.vn');
-        await page.getByLabel(/mật khẩu|password/i).fill('wrongpass');
+        await page.getByRole('textbox', { name: 'Mật khẩu' }).fill('wrongpass');
         await page.getByRole('button', { name: /đăng nhập|login/i }).click();
 
-        // Either an inline error or a toast
+        // Inline error alert shown by the login form
         await expect(
-            page.getByText(/sai|không đúng|invalid|lỗi/i).or(
-                page.locator('.toast-error')
-            )
+            page.locator('[role="alert"]').filter({ hasText: /not correct|sai|không đúng|invalid/i })
         ).toBeVisible({ timeout: 8_000 });
     });
 
     test('login with valid credentials navigates to dashboard', async ({ page }) => {
         await page.goto('/auth/login');
         await page.getByLabel(/email/i).fill(USER);
-        await page.getByLabel(/mật khẩu|password/i).fill(PASS);
+        await page.getByRole('textbox', { name: 'Mật khẩu' }).fill(PASS);
         await page.getByRole('button', { name: /đăng nhập|login/i }).click();
 
         await expect(page).toHaveURL(/\/dashboard/, { timeout: 10_000 });
@@ -45,7 +43,7 @@ test.describe('Authentication', () => {
         // Login first
         await page.goto('/auth/login');
         await page.getByLabel(/email/i).fill(USER);
-        await page.getByLabel(/mật khẩu|password/i).fill(PASS);
+        await page.getByRole('textbox', { name: 'Mật khẩu' }).fill(PASS);
         await page.getByRole('button', { name: /đăng nhập|login/i }).click();
         await expect(page).toHaveURL(/\/dashboard/, { timeout: 10_000 });
 
