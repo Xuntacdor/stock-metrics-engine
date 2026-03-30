@@ -382,9 +382,9 @@ wwwroot/css/
 wwwroot/js/
 wwwroot/images/
 wwwroot/fonts/
-# Angular
-frontend/dist/
-frontend/node_modules/
+# Angular (project lives at src/frontend-web/ — detailed rules in src/frontend-web/.gitignore)
+src/frontend-web/dist/
+src/frontend-web/node_modules/
 
 # Docker
 *.dockerfile
@@ -395,4 +395,5 @@ logs/
 *.log
 
 .claude/
-
+test-results/
+playwright-report/
